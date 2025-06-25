@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">IMove Printer</string>
+    <string name="print_service_name">My Thermal Printer</string>
+</resources>

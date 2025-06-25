@@ -384,7 +384,6 @@
 
 package ua.com.sdegroup.imoveprinter
 
-import android.print.PrintAttributes
 import android.print.PrinterCapabilitiesInfo
 import android.print.PrinterInfo
 import android.print.PrinterId
@@ -403,12 +402,14 @@ import android.os.ParcelFileDescriptor
 import android.os.Environment
 import kotlinx.coroutines.*
 import ua.com.sdegroup.imoveprinter.model.PrinterModel
+import android.print.PrintAttributes
+import androidx.lifecycle.SavedStateHandle
 
 class ThermalPrintService : PrintService() {
 
     private val TAG = "ThermalPrintService"
     private val PRINTER_WIDTH_MM = 58 // стандартна ширина рулону, мм (змінюй під свій принтер)
-    private val PRINTER_DPI = 200     // роздільна здатність принтера
+    private val PRINTER_DPI = 203     // роздільна здатність принтера
     private val PRINTER_WIDTH_PX = ((PRINTER_WIDTH_MM / 25.4) * PRINTER_DPI).toInt() // ≈384px
 
     /** Повертає стандартні розміри паперу у мм */
@@ -432,11 +433,15 @@ class ThermalPrintService : PrintService() {
             override fun onStartPrinterDiscovery(printerIds: MutableList<PrinterId>) {
                 Log.d(TAG, "onStartPrinterDiscovery")
                 val id: PrinterId = generatePrinterId("MY_THERMAL_PRINTER")
-
+    
+                val mediaSize = PrintAttributes.MediaSize(
+                    "THERMAL_58MM", "58mm", PRINTER_WIDTH_PX, 1000
+                )
+    
                 val caps = PrinterCapabilitiesInfo.Builder(id)
-                    .addMediaSize(PrintAttributes.MediaSize.ISO_A4, true)
+                    .addMediaSize(mediaSize, true)
                     .addResolution(
-                        PrintAttributes.Resolution("R200x200", "200×200 dpi", 200, 200),
+                        PrintAttributes.Resolution("default", "203×203 dpi", 203, 203),
                         true
                     )
                     .setColorModes(
@@ -444,33 +449,36 @@ class ThermalPrintService : PrintService() {
                         PrintAttributes.COLOR_MODE_MONOCHROME
                     )
                     .build()
-
+    
                 val info = PrinterInfo.Builder(id, "My Thermal Printer", PrinterInfo.STATUS_IDLE)
                     .setCapabilities(caps)
                     .build()
-
+    
                 addPrinters(listOf(info))
                 Log.d(TAG, "Printer added: $info")
             }
-
+    
             override fun onStopPrinterDiscovery() {
                 Log.d(TAG, "onStopPrinterDiscovery")
             }
+    
             override fun onValidatePrinters(printerIds: MutableList<PrinterId>) {
                 Log.d(TAG, "onValidatePrinters: $printerIds")
             }
+    
             override fun onStartPrinterStateTracking(printerId: PrinterId) {
                 Log.d(TAG, "onStartPrinterStateTracking: $printerId")
             }
+    
             override fun onStopPrinterStateTracking(printerId: PrinterId) {
                 Log.d(TAG, "onStopPrinterStateTracking: $printerId")
             }
+    
             override fun onDestroy() {
                 Log.d(TAG, "PrinterDiscoverySession destroyed")
             }
         }
     }
-
     override fun onPrintJobQueued(job: PrintJob) {
         Log.d(TAG, "PrintJob queued: ${job.info.id}")
         job.start()
@@ -512,7 +520,7 @@ class ThermalPrintService : PrintService() {
         printJob.cancel()
     }
 
-    private suspend fun sendPdfToThermalPrinterAsync(pdfFile: File): Boolean = withContext(Dispatchers.IO) {
+    private suspend fun sendPdfToThermalPrinterAsync(pdfFile: File, addLeftMarginPx: Int = 90): Boolean = withContext(Dispatchers.IO) {
         Log.d(TAG, "sendPdfToThermalPrinter started for file: ${pdfFile.absolutePath}")
         try {
             val context: Context = applicationContext
@@ -522,37 +530,28 @@ class ThermalPrintService : PrintService() {
                 Log.e(TAG, "Failed to render PDF page to bitmap")
                 return@withContext false
             }
-
+    
             // --- Обрезаем белые поля по краям ---
             val croppedBitmap = autoCropBitmap(bitmap)
-
-            // --- Додаємо відступи (якщо треба) ---
-            val printBitmap = addMarginsToBitmap(croppedBitmap, left = 0, top = 0)
-
-            // --- Конвертація в ч/б ---
-            val monoBitmap = toMonoBitmap(printBitmap)
-
-            // --- Ресайз до ширини принтера (чек буде максимально широкий) ---
-            val resizedBitmap = resizeBitmapToWidth(monoBitmap, PRINTER_WIDTH_PX)
-
-            // --- Центрування по ширині рулона ---
-            val centeredBitmap = centerBitmapHorizontally(resizedBitmap, PRINTER_WIDTH_PX)
-
-            // --- Конвертація в RGB_565 ---
-            val finalBitmap = centeredBitmap.copy(Bitmap.Config.RGB_565, false)
-
-            // --- Збереження bitmap для дебагу ---
-            val debugFile = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "debug_print_bitmap.png")
-            try {
-                FileOutputStream(debugFile).use {
-                    finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
-                }
-                Log.d(TAG, "Bitmap saved to: ${debugFile.absolutePath}")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error saving debug bitmap", e)
+    
+            // --- Добавляем отступы ---
+            val printBitmap = withContext(Dispatchers.Main) {
+                PrinterModel(SavedStateHandle()).addLeftMargin(croppedBitmap, addLeftMarginPx)
             }
-
-            // --- Підключення до принтера ---
+    
+            // --- Конвертация в ч/б ---
+            val monoBitmap = toMonoBitmap(printBitmap)
+    
+            // --- Ресайз до ширины принтера ---
+            val resizedBitmap = resizeBitmapToWidth(monoBitmap, PRINTER_WIDTH_PX)
+    
+            // --- Центрирование по ширине рулона ---
+            val centeredBitmap = centerBitmapHorizontally(resizedBitmap, PRINTER_WIDTH_PX)
+    
+            // --- Конвертация в RGB_565 ---
+            val finalBitmap = centeredBitmap.copy(Bitmap.Config.RGB_565, false)
+    
+            // --- Подключение к принтеру ---
             val prefs = applicationContext.getSharedPreferences("printer_prefs", Context.MODE_PRIVATE)
             val printerAddress = prefs.getString("printer_address", null)
             if (printerAddress.isNullOrEmpty()) {
@@ -565,24 +564,33 @@ class ThermalPrintService : PrintService() {
                 Log.e(TAG, "Не удалось подключиться к принтеру: $printerAddress, код ошибки: $connected")
                 return@withContext false
             }
-
+    
             Log.d(TAG, "Printer is opened: ${cpcl.PrinterHelper.IsOpened()}")
-
-            // --- Друк з різними rotation ---
+    
+            // --- Печать изображения с разными поворотами ---
             var result = -1
             for (rotation in 0..3) {
                 Log.d(TAG, "Trying printBitmap with rotation=$rotation")
                 result = cpcl.PrinterHelper.printBitmap(0, 0, 0, finalBitmap, 0, false, rotation)
                 Log.d(TAG, "Pic result (rotation=$rotation): $result")
-                if (result == 0) break
+                if (result == 0) {
+                    Log.d(TAG, "Successful print with rotation=$rotation")
+                    break // Успешный поворот, выходим из цикла
+                }
             }
-
-            // --- Обов'язково Form() і Print() ---
+    
+            if (result != 0) {
+                Log.e(TAG, "Ошибка при печати изображения, код ошибки: $result")
+                cpcl.PrinterHelper.portClose()
+                return@withContext false
+            }
+    
+            // --- Завершение печати ---
             cpcl.PrinterHelper.Form()
             cpcl.PrinterHelper.Print()
-
+    
             cpcl.PrinterHelper.portClose()
-            return@withContext result == 0
+            return@withContext true
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка при отправке PDF на принтер", e)
             return@withContext false
@@ -700,34 +708,37 @@ class ThermalPrintService : PrintService() {
         var fileDescriptor: ParcelFileDescriptor? = null
         var pdfRenderer: PdfRenderer? = null
         var currentPage: PdfRenderer.Page? = null
-
+    
         try {
             if (pdfUri == null) return@withContext null
             fileDescriptor = context.contentResolver.openFileDescriptor(pdfUri, "r")
             if (fileDescriptor == null) return@withContext null
             pdfRenderer = PdfRenderer(fileDescriptor)
             if (pageNumber < 0 || pageNumber >= pdfRenderer.pageCount) return@withContext null
-
+    
             currentPage = pdfRenderer.openPage(pageNumber)
-
-            // A4 в мм: 210×297 мм → в px при 200 dpi
+    
+            // A4 в мм: 210×297 мм → в px при 203 dpi
             val a4WidthPx = (210f / 25.4f * PRINTER_DPI).toInt()  // ≈1653
             val a4HeightPx = (297f / 25.4f * PRINTER_DPI).toInt() // ≈2339
-
+    
             val a4Bitmap = Bitmap.createBitmap(a4WidthPx, a4HeightPx, Bitmap.Config.ARGB_8888)
             a4Bitmap.eraseColor(Color.WHITE)
-
+    
             currentPage.render(a4Bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-
-            // Пропорційний ресайз під ширину принтера (384px)
+    
+            // Пропорциональный ресайз под ширину принтера
             val targetWidthPx = PRINTER_WIDTH_PX
             val aspectRatio = a4Bitmap.height.toFloat() / a4Bitmap.width
             val targetHeightPx = (targetWidthPx * aspectRatio).toInt()
-
-            val resizedBitmap = Bitmap.createScaledBitmap(a4Bitmap, targetWidthPx, targetHeightPx, true)
-
+    
+            // Увеличиваем длину, если требуется
+            val adjustedHeightPx = adjustHeightForContent(a4Bitmap, targetHeightPx)
+    
+            val resizedBitmap = Bitmap.createScaledBitmap(a4Bitmap, targetWidthPx, adjustedHeightPx, true)
+    
             return@withContext resizedBitmap
-
+    
         } catch (e: Exception) {
             Log.e(TAG, "Error converting A4 PDF to thermal bitmap", e)
             return@withContext null
@@ -736,5 +747,25 @@ class ThermalPrintService : PrintService() {
             pdfRenderer?.close()
             fileDescriptor?.close()
         }
+    }
+    
+    // Метод для корректировки длины на основе содержимого
+    private fun adjustHeightForContent(bitmap: Bitmap, originalHeight: Int): Int {
+        val contentHeight = detectContentHeight(bitmap)
+        return if (contentHeight > originalHeight) contentHeight else originalHeight
+    }
+    
+    // Метод для определения высоты содержимого
+    private fun detectContentHeight(bitmap: Bitmap): Int {
+        val width = bitmap.width
+        val height = bitmap.height
+        for (y in height - 1 downTo 0) {
+            for (x in 0 until width) {
+                if (bitmap.getPixel(x, y) != Color.WHITE) {
+                    return y + 1 // Возвращаем первую строку с содержимым
+                }
+            }
+        }
+        return height // Если содержимое не найдено, возвращаем оригинальную высоту
     }
 }

@@ -198,7 +198,7 @@ fun BluetoothDiscoveryScreen(
   Scaffold(
     topBar = {
       TopAppBar(
-        title = { Text("Bluetooth devices") },
+        title = { Text("Пристрої Bluetooth") },
         navigationIcon = {
           IconButton(onClick = { navController.popBackStack() }) {
             Icon(
@@ -231,7 +231,7 @@ fun BluetoothDiscoveryScreen(
       ) {
         if (bluetoothDevices.isEmpty() && !isRefreshing && bluetoothState !is BluetoothState.Error) {
           Text(
-            text = "No Bluetooth devices found. Pull down to refresh.",
+            text = "Пристроїв Bluetooth не знайдено. Потягніть униз, щоб оновити.",
             modifier = Modifier.align(Alignment.Center)
           )
         }
@@ -290,14 +290,14 @@ fun BluetoothDiscoveryScreen(
         if (showProgressDialog) {
           AlertDialog(
             onDismissRequest = { /* Cannot dismiss during pairing */ },
-            title = { Text(text = "Pairing") },
+            title = { Text(text = "Створення пари") },
             text = {
               Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
               ) {
                 CircularProgressIndicator(modifier = Modifier.padding(16.dp))
-                Text("Pairing with device...")
+                Text("Сполучення з пристроєм...")
               }
             },
             confirmButton = {}
@@ -329,7 +329,7 @@ fun BluetoothDeviceItem(
   ) {
     Column {
       Text(
-        text = device.name ?: "Unknown Device",
+        text = device.name ?: "Невідомий пристрій",
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
       )

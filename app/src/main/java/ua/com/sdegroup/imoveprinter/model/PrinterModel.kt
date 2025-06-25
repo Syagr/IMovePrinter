@@ -182,15 +182,15 @@ fun getBluetoothPrinterStatus(): String {
         Log.d(TAG, "getBluetoothPrinterStatus called")
         if (!cpcl.PrinterHelper.IsOpened()) {
             Log.e(TAG, "Printer port is not opened")
-            return "Not connected"
+            return "Не підключено"
         }
         val getStatus: Int = cpcl.PrinterHelper.getstatus()
         Log.d(TAG, "Status: $getStatus")
         when (getStatus) {
-            0 -> "Ready"
-            2 -> "Out of paper"
-            6 -> "Cover open"
-            else -> "Error"
+            0 -> "Готовий"
+            2 -> "Закінчився папір"
+            6 -> "Кришка відкрита"
+            else -> "Помилка"
         }
     } catch (e: Exception) {
         Log.e(TAG, "Exception in getBluetoothPrinterStatus", e)

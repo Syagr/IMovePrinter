@@ -66,10 +66,7 @@ fun PrinterSetup(
     backStackEntry: NavBackStackEntry
 ) {
     val context = LocalContext.current
-    val viewModel: PrinterModel =
-        viewModel(factory = PrinterModelFactory(backStackEntry.savedStateHandle))
-    val printerVM: PrinterModel =
-        viewModel(factory = PrinterModelFactory(backStackEntry.savedStateHandle))
+    val viewModel: PrinterModel = viewModel(factory = PrinterModelFactory(backStackEntry.savedStateHandle))
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -195,7 +192,7 @@ fun PrinterSetup(
                         "Bluetooth" -> {
                             navController.navigate("bluetooth_discovery")
                             pairedDevices.getOrNull(selectedIndex)?.address?.let {
-                                scope.launch { printerVM.connect(context) }
+                                scope.launch { viewModel.connect(context, 0) }
                             }
                         }
                         "WiFi" -> {
@@ -205,10 +202,18 @@ fun PrinterSetup(
                     }
                 },
                 onStatus = {
-                    scope.launch {
-                        viewModel.connect(context)
-                        printerStatus = viewModel.getStatus()
-                        statusText = "Статус принтера: $printerStatus"
+                    val selectedDevice = pairedDevices.getOrNull(selectedIndex)
+                    selectedDevice?.address?.let {
+                        viewModel.setAddress(it)
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                viewModel.connect(context, 0)
+                            }
+                            printerStatus = withContext(Dispatchers.IO) {
+                                viewModel.getStatus()
+                            }
+                            statusText = "Статус принтера: $printerStatus"
+                        }
                     }
                 },
                 onDisconnect = {
@@ -228,8 +233,8 @@ fun PrinterSetup(
                 onPrintReceipt = {
                     scope.launch {
                         withContext(Dispatchers.IO) {
-                            printerVM.connect(context)
-                            printerVM.printTestReceipt()
+                            viewModel.connect(context, 0)
+                            viewModel.printTestReceipt()
                         }
                         statusText = "Тестову квитанцію відправлено"
                     }
@@ -237,16 +242,21 @@ fun PrinterSetup(
                 onPrintPDF = {
                     scope.launch {
                         withContext(Dispatchers.IO) {
-                            printerVM.connect(context)
-                            printerVM.printPDF(context)
+                            viewModel.connect(context, 0)
+                            viewModel.printPDF(context)
                         }
                         statusText = "PDF надіслано на друк"
                     }
                 },
                 onVersion = {
-                    viewModel.getVersion()
-                    statusText = "Версія запиту виконана"
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            viewModel.getVersion()
+                        }
+                        statusText = "Версія запиту виконана"
+                    }
                 }
+
             )
 
             Spacer(Modifier.height(16.dp))

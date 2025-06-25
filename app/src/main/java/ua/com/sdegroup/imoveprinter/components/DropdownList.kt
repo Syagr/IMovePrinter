@@ -1,9 +1,17 @@
 package ua.com.sdegroup.imoveprinter.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.CardDefaults
+
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,62 +40,92 @@ import androidx.compose.ui.window.PopupProperties
 fun DropdownList(
   itemList: List<String>,
   selectedIndex: Int,
-  modifier: Modifier,
+  modifier: Modifier = Modifier,
   onItemClick: (Int) -> Unit,
   color: Color = MaterialTheme.colorScheme.onPrimary,
-  backgroundColor: Color = MaterialTheme.colorScheme.primary,
+  backgroundColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
 ) {
   var showDropdown by remember { mutableStateOf(false) }
-  //val scrollState = rememberScrollState()
+
+  val popupBackground = MaterialTheme.colorScheme.onPrimaryContainer
 
   Column(
-    modifier = Modifier,
-    horizontalAlignment = Alignment.CenterHorizontally,
-    verticalArrangement = Arrangement.Center
+    modifier = modifier,
+    horizontalAlignment = Alignment.CenterHorizontally
   ) {
+    // Кнопка
     Box(
-      modifier = modifier
-        .background(color = backgroundColor, shape = RoundedCornerShape(20.dp))
-        .padding(vertical = 4.dp).clickable { showDropdown = true },
-      contentAlignment = Alignment.Center,
+      modifier = Modifier
+        .fillMaxWidth()
+        .background(
+          brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+            listOf(backgroundColor, backgroundColor.copy(alpha = 0.8f))
+          ),
+          shape = RoundedCornerShape(16.dp)
+        )
+        .clickable { showDropdown = !showDropdown }
+        .padding(vertical = 14.dp, horizontal = 18.dp),
+      contentAlignment = Alignment.Center
     ) {
       TextWithTrailingIcon(
         text = itemList[selectedIndex],
-        modifier = Modifier.padding(3.dp),
         icon = Icons.Filled.ArrowDropDown,
         color = color
       )
     }
 
-    Box { // dropdown list
-      if (showDropdown) {
-        Popup(
-          alignment = Alignment.TopCenter,
-          properties = PopupProperties(excludeFromSystemGesture = true),
-          onDismissRequest = { showDropdown = false }, // to dismiss on click outside
+    // Выпадающее меню
+    AnimatedVisibility(
+      visible = showDropdown,
+      enter = fadeIn() + expandVertically(),
+      exit = fadeOut() + shrinkVertically()
+    ) {
+      Popup(
+        alignment = Alignment.TopCenter,
+        onDismissRequest = { showDropdown = false },
+        properties = PopupProperties(focusable = true)
+      ) {
+        ElevatedCard(
+          modifier = Modifier
+            .padding(top = 8.dp)
+            .fillMaxWidth(0.6f)
+            .heightIn(max = 240.dp),
+          shape = RoundedCornerShape(14.dp),
+          elevation = CardDefaults.elevatedCardElevation(12.dp),
+          colors = CardDefaults.cardColors(containerColor = popupBackground)
         ) {
-          Column(
-            modifier = modifier.heightIn(max = 100.dp).padding(top = 2.dp),//.border(width = 1.dp, color = color),
-            horizontalAlignment = Alignment.CenterHorizontally,
-          ) {
-            itemList.onEachIndexed { index, item ->
-              val cornerRadius = 4.dp;
-              val itemShape = when (index) {
-                0 -> RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius, bottomStart = 0.dp, bottomEnd = 0.dp)
-                itemList.lastIndex -> RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = cornerRadius, bottomEnd = cornerRadius)
-                else -> RoundedCornerShape(0.dp)
-              }
-              if (index != 0) {
-                Divider(thickness = 1.dp, color = color)
-              }
+          Column {
+            itemList.forEachIndexed { index, item ->
+              val isSelected = index == selectedIndex
+              val interactionSource = remember { MutableInteractionSource() }
+
               Box(
-                modifier = Modifier.background(color = backgroundColor, shape = itemShape)
-                  .fillMaxWidth().clickable {
-                  onItemClick(index)
-                  showDropdown = !showDropdown
-                },
-                contentAlignment = Alignment.Center
-              ) { Text(text = item, color = color) }
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .background(
+                    if (isSelected) popupBackground.copy(alpha = 0.2f)
+                    else Color.Transparent
+                  )
+                  .clickable(
+                    interactionSource = interactionSource,
+                    indication = null
+                  ) {
+                    onItemClick(index)
+                    showDropdown = false
+                  }
+                  .padding(vertical = 12.dp, horizontal = 18.dp),
+                contentAlignment = Alignment.CenterStart
+              ) {
+                Text(
+                  text = item,
+                  color = color,
+                  style = MaterialTheme.typography.bodyMedium
+                )
+              }
+
+              if (index != itemList.lastIndex) {
+                Divider(color = color.copy(alpha = 0.1f), thickness = 1.dp)
+              }
             }
           }
         }

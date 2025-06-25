@@ -1,55 +1,43 @@
 package ua.com.sdegroup.imoveprinter.screens
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import android.content.pm.PackageManager
+import android.net.wifi.WifiManager
+import android.os.Build
+import android.text.format.Formatter
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ua.com.sdegroup.imoveprinter.components.DropdownList
-import ua.com.sdegroup.imoveprinter.ui.theme.IMovePrinterTheme
-import ua.com.sdegroup.imoveprinter.model.PrinterModel
 import ua.com.sdegroup.imoveprinter.factory.PrinterModelFactory
-import androidx.compose.material3.MaterialTheme
+import ua.com.sdegroup.imoveprinter.model.PrinterModel
+import ua.com.sdegroup.imoveprinter.ui.theme.IMovePrinterTheme
 
+@SuppressLint("ServiceCast")
 fun getBluetoothAdapter(context: Context): BluetoothAdapter? {
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     return bluetoothManager.adapter
@@ -59,7 +47,16 @@ fun getBluetoothAdapter(context: Context): BluetoothAdapter? {
 fun OpenDeviceList() {
     val context = LocalContext.current
     val bluetoothAdapter = remember { getBluetoothAdapter(context) }
-    //if (bluetoothAdapter)
+}
+
+fun unpairDevice(device: BluetoothDevice): Boolean {
+    return try {
+        val method = device.javaClass.getMethod("removeBond")
+        method.invoke(device) as Boolean
+    } catch (e: Exception) {
+        Log.e("Unpair", "Failed to unpair", e)
+        false
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -70,124 +67,211 @@ fun PrinterSetup(
 ) {
     val context = LocalContext.current
     val viewModel: PrinterModel = viewModel(factory = PrinterModelFactory(backStackEntry.savedStateHandle))
+
     val snackbarHostState = remember { SnackbarHostState() }
+
+    var hasConnect by remember { mutableStateOf(false) }
+    var hasScan by remember { mutableStateOf(false) }
+
+    val wifiIpFlow = backStackEntry.savedStateHandle.getStateFlow("wifi_ip", "")
+    val wifiPortFlow = backStackEntry.savedStateHandle.getStateFlow("wifi_port", 9100)
+    val wifiIp by wifiIpFlow.collectAsState()
+    val wifiPort by wifiPortFlow.collectAsState()
+
+    val permsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        hasConnect = results[Manifest.permission.BLUETOOTH_CONNECT] == true
+        hasScan = results[Manifest.permission.BLUETOOTH_SCAN] == true
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val toReq = listOf(
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.BLUETOOTH_SCAN
+            ).filter { perm ->
+                ContextCompat.checkSelfPermission(
+                    context,
+                    perm
+                ) != PackageManager.PERMISSION_GRANTED
+            }
+            if (toReq.isNotEmpty()) permsLauncher.launch(toReq.toTypedArray())
+            else {
+                hasConnect = true; hasScan = true
+            }
+        } else {
+            hasConnect = true; hasScan = true
+        }
+    }
+
     val scope = rememberCoroutineScope()
     var expanded by remember { mutableStateOf(false) }
-    val menuItems = listOf("Menu1", "Menu2")
-    val connectionTypes = listOf("Bluetooth", "WiFi", "USB")
+    var refreshKey by remember { mutableStateOf(0) }
+
+    val adapter = BluetoothAdapter.getDefaultAdapter()
+    val pairedDevices: List<BluetoothDevice> = remember(hasConnect, refreshKey) {
+        if (hasConnect && adapter != null && adapter.isEnabled) adapter.bondedDevices.toList()
+        else emptyList()
+    }
+    val pairedNames = pairedDevices.map { it.name ?: it.address }
+
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
     var printerStatus by remember { mutableStateOf("") }
+    var menuExpanded by remember { mutableStateOf(false) }
+    val connTypes = listOf("Bluetooth", "WiFi", "USB")
+    var selType by rememberSaveable { mutableStateOf(0) }
+    var statusText by remember { mutableStateOf("") }
+    var selectedAddress by remember { mutableStateOf<String?>(null) }
+    val wifiMgr = context.applicationContext
+        .getSystemService(Context.WIFI_SERVICE) as WifiManager
+
+    fun resolvePrinterIp(): String? {
+        if (wifiIp.isNotBlank()) return wifiIp
+        val dhcp = wifiMgr.dhcpInfo ?: return null
+        return Formatter.formatIpAddress(dhcp.gateway)
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Printer Setup") },
+                title = { Text("Налаштування принтера") },
                 actions = {
-                    Box {
-                        IconButton(onClick = { expanded = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "Menu")
-                        }
-                        DropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            menuItems.forEach { item ->
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "Вибрати принтер")
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        if (pairedNames.isEmpty()) {
+                            DropdownMenuItem(
+                                text = { Text("Немає запарених пристроїв") },
+                                onClick = { menuExpanded = false }
+                            )
+                        } else {
+                            pairedNames.forEachIndexed { idx, name ->
                                 DropdownMenuItem(
-                                    text = { Text(item) },
-                                    onClick = { expanded = false }
+                                    text = { Text(name) },
+                                    onClick = {
+                                        selectedIndex = idx
+                                        menuExpanded = false
+                                    }
                                 )
                             }
                         }
                     }
-                }
-            )
+                })
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            FloatingActionButton(onClick = {
-                scope.launch {
-                    val result = snackbarHostState.showSnackbar(
-                        message = "Hello from Snackbar!",
-                        actionLabel = "Dismiss"
-                    )
-                    when (result) {
-                        SnackbarResult.Dismissed -> println("Snackbar dismissed")
-                        SnackbarResult.ActionPerformed -> println("Snackbar action performed")
-                    }
-                }
-            }) {
-                Icon(Icons.Filled.Add, "Add FAB")
-            }
-        }
-    ) { innerPadding ->
+        floatingActionButton = {}) { padding ->
         Column(
-            modifier = Modifier
-                .padding(innerPadding)
+            Modifier
+                .padding(padding)
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Connection type")
-                  DropdownList(
-                      itemList = connectionTypes,
-                      selectedIndex = selectedIndex,
-                      modifier = Modifier.width(160.dp),
-                      onItemClick = { selectedIndex = it },
-                      color = MaterialTheme.colorScheme.primary,
-                      backgroundColor = MaterialTheme.colorScheme.onPrimary
-                  )
+                Text("Тип підключення")
+                DropdownList(
+                    itemList = connTypes,
+                    selectedIndex = selType,
+                    modifier = Modifier.width(160.dp),
+                    onItemClick = { selType = it }
+                )
             }
-            Button(onClick = {
-                when (connectionTypes[selectedIndex]) {
-                    "Bluetooth" -> navController.navigate("bluetooth_discovery")
-                    "WiFi" -> navController.navigate("wifi_discovery")
+            Spacer(Modifier.height(16.dp))
+
+            PrinterActionsGrid(
+                onConnect = {
+                    when (connTypes[selType]) {
+                        "Bluetooth" -> {
+                            navController.navigate("bluetooth_discovery")
+                            pairedDevices.getOrNull(selectedIndex)?.address?.let {
+                                scope.launch { viewModel.connect(context, 0) }
+                            }
+                        }
+                        "WiFi" -> {
+                            navController.navigate("wifi_discovery")
+                        }
+                        "USB" -> {}
+                    }
+                },
+                onStatus = {
+                    val selectedDevice = pairedDevices.getOrNull(selectedIndex)
+                    selectedDevice?.address?.let {
+                        viewModel.setAddress(it)
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                viewModel.connect(context, 0)
+                            }
+                            printerStatus = withContext(Dispatchers.IO) {
+                                viewModel.getStatus()
+                            }
+                            statusText = "Статус принтера: $printerStatus"
+                        }
+                    }
+                },
+                onDisconnect = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            viewModel.disconnect()
+                            val device = pairedDevices.getOrNull(selectedIndex)
+                            if (device != null) {
+                                val success = unpairDevice(device)
+                                Log.d("PrinterSetup", "Результат розпарювання: $success")
+                            }
+                        }
+                        refreshKey++
+                        statusText = "Вимкнено від принтера"
+                    }
+                },
+                onPrintReceipt = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            viewModel.connect(context, 0)
+                            viewModel.printTestReceipt()
+                        }
+                        statusText = "Тестову квитанцію відправлено"
+                    }
+                },
+                onPrintPDF = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            viewModel.connect(context, 0)
+                            viewModel.printPDF(context)
+                        }
+                        statusText = "PDF надіслано на друк"
+                    }
+                },
+                onVersion = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            viewModel.getVersion()
+                        }
+                        statusText = "Версія запиту виконана"
+                    }
                 }
-            }) {
-                Text("Connect")
-            }
-            val scope = rememberCoroutineScope()
-            
-            Button(onClick = {
-                scope.launch {
-                    viewModel.connect(context)
-                    printerStatus = viewModel.getStatus()
-                }
-            }) {
-                Text("Get Printer Status")
-            }
-            Text(printerStatus)
-            Button(onClick = {
-                viewModel.disconnect()
-            }) {
-                Text("Disconnect")
-            }
-            Button(onClick = {
-                viewModel.printTestReceipt()
-            }) {
-                Text("Print Test Receipt")
-            }
-            Button(onClick = {
-                viewModel.printPDF(context)
-            }) {
-                Text("Print Test Receipt")
-            }
-            Button(onClick = {
-                viewModel.getVersion()
-            }) {
-                Text("Print Version")
-            }
+
+            )
+
+            Spacer(Modifier.height(16.dp))
+            Text(statusText)
         }
     }
 }
 
-/*@Preview(showBackground = true)
+@Preview(showBackground = true)
 @Composable
-fun MyScreenPreview() {
+fun PrinterSetupPreview() {
     IMovePrinterTheme {
-        PrinterSetup()
+        PrinterSetup(
+            navController = rememberNavController(),
+            backStackEntry = rememberNavController().currentBackStackEntry!!
+        )
     }
-}*/
+}

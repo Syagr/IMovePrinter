@@ -43,7 +43,7 @@ fun AppNavigation() {
         composable("bluetooth_discovery") {
             BluetoothDiscoveryScreen(navController = navController)
         }
-        composable("wifi_discovery") { // Новый маршрут для Wi-Fi
+        composable("wifi_discovery") {
             WifiDiscoveryScreen(navController = navController)
         }
     }

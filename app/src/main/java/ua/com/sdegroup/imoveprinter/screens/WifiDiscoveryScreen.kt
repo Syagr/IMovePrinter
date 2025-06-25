@@ -1,5 +1,6 @@
 package ua.com.sdegroup.imoveprinter.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -7,14 +8,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import java.net.Socket
 import java.net.InetSocketAddress
 import java.io.OutputStream
 import androidx.navigation.NavController
+import cpcl.PrinterHelper
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 
@@ -34,45 +41,95 @@ fun sendCpclCommand(ip: String, port: Int, cpcl: String): Boolean {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WifiDiscoveryScreen(navController: NavController) {
-    val apIp = "192.168.1.1"
-    val apPort = 9100
+    val context = LocalContext.current
+    var ipInput by remember { mutableStateOf("192.168.1.1") }
     var connectionStatus by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text("Wi-Fi Printer AP Mode (No Password)", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(16.dp))
-        Text("Connect your device to the printer's Wi-Fi network (e.g., T3PRO_AP-XXXX).", style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(16.dp))
-        Text("Printer IP: $apIp", style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(8.dp))
-        Button(
-            onClick = {
-                scope.launch {
-                    val cpclTest = """
-                        ! 0 200 200 210 1
-                        TEXT 4 0 30 40 CPCL TEST
-                        FORM
-                        PRINT
-                    """.trimIndent()
-                    val result = withContext(Dispatchers.IO) {
-                        sendCpclCommand(apIp, apPort, cpclTest)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Wi-Fi принтер") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Назад"
+                        )
                     }
-                    connectionStatus = if (result) "Test sent!" else "Send error!"
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Print Test")
+                },
+                colors = TopAppBarDefaults.topAppBarColors()
+            )
         }
-        Spacer(Modifier.height(16.dp))
-        Text(connectionStatus)
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Top,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            OutlinedTextField(
+                value = ipInput,
+                onValueChange = { ipInput = it },
+                label = { Text("Введіть IP принтер") },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                    cursorColor = MaterialTheme.colorScheme.primary,
+                    focusedLabelColor = MaterialTheme.colorScheme.primary
+                ),
+                textStyle = MaterialTheme.typography.bodyLarge
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            Button(
+                onClick = {
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            PrinterHelper.portOpenWIFI(context, ipInput)
+                        }
+
+                        if (result == 0) {
+                            PrinterHelper.printAreaSize("0", "200", "200", "100", "1")
+                            PrinterHelper.Text(PrinterHelper.TEXT, "4", "0", "30", "40", "CPCL TEST")
+                            PrinterHelper.Form()
+                            val printResult = PrinterHelper.Print()
+                            connectionStatus = if (printResult > 0)
+                                "Друк успішно відправлено"
+                            else
+                                "Помилка друку"
+                        } else {
+                            connectionStatus = "Не вдалося підключитися до принтера ($ipInput)"
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Підключитися та надрукувати")
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            Text(
+                text = connectionStatus,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (connectionStatus.contains("Успішно")) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.error
+            )
+        }
     }
 }

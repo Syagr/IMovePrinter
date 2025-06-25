@@ -1,6 +1,7 @@
 package ua.com.sdegroup.imoveprinter.model
 
 import android.content.Context
+import kotlinx.coroutines.delay
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -10,6 +11,7 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import cpcl.PrinterHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,7 +22,7 @@ import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
- 
+
 
 class PrinterModel(
     private val savedStateHandle: SavedStateHandle
@@ -118,6 +120,11 @@ fun printPDF(context: Context) {
         }
     }
 
+    fun setAddress(address: String) {
+        _receivedAddress.value = address
+        Log.d(TAG, "Set Bluetooth address: $address")
+    }
+
     /**
      * Сохраняет bitmap во внутреннее хранилище.
      */
@@ -143,27 +150,22 @@ fun printPDF(context: Context) {
 
     // --- Методы для работы с Bluetooth-принтером через PrinterHelper (если используется) ---
 
-    suspend fun connect(context: Context) = withContext(Dispatchers.IO) {
+    fun connect(context: Context, mode: Int) {
         val address = receivedAddress.value
-        if (!address.isNullOrEmpty()) {
-            val isOpened = cpcl.PrinterHelper.IsOpened()
+        if (mode == 0) {
+            val isOpened = PrinterHelper.IsOpened()
             Log.d(TAG, "Connecting: $address, isOpened: $isOpened")
             if (!isOpened) {
-                val state = cpcl.PrinterHelper.portOpenBT(context, address)
-                if (state == 0) {
-                    Log.d(TAG, "Connected successfully")
-                } else {
-                    Log.e(TAG, "Failed to connect, state: $state")
-                    // Попробуйте повторное подключение или покажите сообщение об ошибке
-                }
+                val state = PrinterHelper.portOpenBT(context, address)
+                Log.d(TAG, "Connected: $state")
             }
-        } else {
-            Log.e(TAG, "No address found for connection")
         }
     }
-    
-    suspend fun getStatus(): String = withContext(Dispatchers.IO) {
-        getBluetoothPrinterStatus()
+
+
+    suspend fun getStatus(): String {
+        delay(300)
+        return getBluetoothPrinterStatus()
     }
 
     fun disconnect() {
@@ -182,15 +184,15 @@ fun getBluetoothPrinterStatus(): String {
         Log.d(TAG, "getBluetoothPrinterStatus called")
         if (!cpcl.PrinterHelper.IsOpened()) {
             Log.e(TAG, "Printer port is not opened")
-            return "Not connected"
+            return "Не підключено"
         }
         val getStatus: Int = cpcl.PrinterHelper.getstatus()
         Log.d(TAG, "Status: $getStatus")
         when (getStatus) {
-            0 -> "Ready"
-            2 -> "Out of paper"
-            6 -> "Cover open"
-            else -> "Error"
+            0 -> "Готовий"
+            2 -> "Закінчився папір"
+            6 -> "Кришка відкрита"
+            else -> "Помилка"
         }
     } catch (e: Exception) {
         Log.e(TAG, "Exception in getBluetoothPrinterStatus", e)

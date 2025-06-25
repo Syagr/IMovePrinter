@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
+import android.location.LocationManager
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
@@ -111,20 +112,39 @@ fun BluetoothDiscoveryScreen(
     }
   }
 
+  // ActivityResultLauncher for Location enable request
+  val enableLocationLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.StartActivityForResult()
+  ) { result ->
+    if (isLocationEnabled(context)) {
+      Toast.makeText(context, "Location enabled!", Toast.LENGTH_SHORT).show()
+      viewModel.startDiscovery()
+    } else {
+      Toast.makeText(context, "Location not enabled. Please enable it to continue.", Toast.LENGTH_SHORT).show()
+      errorMessage = "Location not enabled. Please enable it to continue."
+    }
+  }
+
   // --- Lifecycle and Initialization ---
   LaunchedEffect(Unit) {
     // Request permissions when the screen first appears
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      requestPermissionLauncher.launch(
-        arrayOf(
-          Manifest.permission.BLUETOOTH_SCAN,
-          Manifest.permission.BLUETOOTH_CONNECT
-        )
-      )
+    if (!isLocationEnabled(context)) {
+      val enableLocationIntent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+      enableLocationLauncher.launch(enableLocationIntent)
     } else {
-      requestPermissionLauncher.launch(
-        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-      )
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        requestPermissionLauncher.launch(
+          arrayOf(
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.BLUETOOTH_CONNECT,
+            Manifest.permission.ACCESS_FINE_LOCATION
+          )
+        )
+      } else {
+        requestPermissionLauncher.launch(
+          arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        )
+      }
     }
   }
 
@@ -333,7 +353,7 @@ fun BluetoothDeviceItem(
   }
 }
 
-// Helper functions for checking Bluetooth status
+// Helper functions for checking Bluetooth and Location status
 private fun isBluetoothEnabled(context: Context): Boolean {
   val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
   return bluetoothManager.adapter?.isEnabled == true
@@ -342,6 +362,12 @@ private fun isBluetoothEnabled(context: Context): Boolean {
 private fun bluetoothAdapterInitialized(context: Context): Boolean {
   val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
   return bluetoothManager.adapter != null
+}
+
+private fun isLocationEnabled(context: Context): Boolean {
+  val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+  return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+         locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
 }
 
 

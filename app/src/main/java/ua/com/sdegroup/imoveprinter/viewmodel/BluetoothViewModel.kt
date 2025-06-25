@@ -179,11 +179,31 @@ class BluetoothViewModel : ViewModel() {
 
   // Check for necessary Bluetooth permissions
   private fun hasBluetoothPermissions(): Boolean {
+    if (_context == null) {
+        Log.e(TAG, "Context is null. Cannot check permissions.")
+        return false
+    }
+
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      _context?.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
-              _context?.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        val scanPermissionGranted = _context!!.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+        val connectPermissionGranted = _context!!.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+
+        if (!scanPermissionGranted) {
+            Log.e(TAG, "BLUETOOTH_SCAN permission not granted.")
+        }
+        if (!connectPermissionGranted) {
+            Log.e(TAG, "BLUETOOTH_CONNECT permission not granted.")
+        }
+
+        scanPermissionGranted && connectPermissionGranted
     } else {
-      _context?.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val locationPermissionGranted = _context!!.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+        if (!locationPermissionGranted) {
+            Log.e(TAG, "ACCESS_FINE_LOCATION permission not granted.")
+        }
+
+        locationPermissionGranted
     }
   }
 

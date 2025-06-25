@@ -113,7 +113,11 @@ class BluetoothViewModel : ViewModel() {
   }
 
   @SuppressLint("MissingPermission")
-  fun startDiscovery() {
+  fun startDiscovery(context: Context) {
+    if (_context == null) {
+        initializeBluetooth(context)
+    }
+
     if (!hasBluetoothPermissions()) {
       _bluetoothState.value = BluetoothState.Error("Bluetooth permissions not granted1.")
       return
@@ -188,20 +192,14 @@ class BluetoothViewModel : ViewModel() {
         val scanPermissionGranted = _context!!.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
         val connectPermissionGranted = _context!!.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
 
-        if (!scanPermissionGranted) {
-            Log.e(TAG, "BLUETOOTH_SCAN permission not granted.")
-        }
-        if (!connectPermissionGranted) {
-            Log.e(TAG, "BLUETOOTH_CONNECT permission not granted.")
-        }
+        Log.d(TAG, "BLUETOOTH_SCAN granted: $scanPermissionGranted")
+        Log.d(TAG, "BLUETOOTH_CONNECT granted: $connectPermissionGranted")
 
         scanPermissionGranted && connectPermissionGranted
     } else {
         val locationPermissionGranted = _context!!.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
-        if (!locationPermissionGranted) {
-            Log.e(TAG, "ACCESS_FINE_LOCATION permission not granted.")
-        }
+        Log.d(TAG, "ACCESS_FINE_LOCATION granted: $locationPermissionGranted")
 
         locationPermissionGranted
     }

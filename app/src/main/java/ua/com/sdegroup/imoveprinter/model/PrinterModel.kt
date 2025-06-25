@@ -150,8 +150,15 @@ fun printPDF(context: Context) {
             Log.d(TAG, "Connecting: $address, isOpened: $isOpened")
             if (!isOpened) {
                 val state = cpcl.PrinterHelper.portOpenBT(context, address)
-                Log.d(TAG, "Connected: $state")
+                if (state == 0) {
+                    Log.d(TAG, "Connected successfully")
+                } else {
+                    Log.e(TAG, "Failed to connect, state: $state")
+                    // Попробуйте повторное подключение или покажите сообщение об ошибке
+                }
             }
+        } else {
+            Log.e(TAG, "No address found for connection")
         }
     }
     

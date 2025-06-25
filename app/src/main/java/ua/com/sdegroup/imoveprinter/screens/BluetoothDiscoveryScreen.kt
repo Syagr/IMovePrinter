@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.location.LocationManager
 import android.os.Build
 import android.provider.Settings
@@ -78,13 +79,16 @@ fun BluetoothDiscoveryScreen(
   var showProgressDialog by remember { mutableStateOf(false) }
   var errorMessage by remember { mutableStateOf<String?>(null) }
 
+  // SharedPreferences initialization
+  val sharedPreferences = LocalContext.current.getSharedPreferences("printer_prefs", Context.MODE_PRIVATE)
+
   // ActivityResultLauncher for Bluetooth enable request
   val enableBtLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.StartActivityForResult()
   ) { result ->
     if (result.resultCode == Activity.RESULT_OK) {
       Toast.makeText(context, "Bluetooth enabled!", Toast.LENGTH_SHORT).show()
-      viewModel.startDiscovery()
+      viewModel.startDiscovery(context)
     } else {
       Toast.makeText(context, "Bluetooth not enabled.", Toast.LENGTH_SHORT).show()
       errorMessage = "Bluetooth not enabled. Please enable it to continue."
@@ -105,7 +109,7 @@ fun BluetoothDiscoveryScreen(
     if (granted) {
       // Permissions granted, proceed with initialization
       viewModel.initializeBluetooth(context)
-      viewModel.startDiscovery()
+      viewModel.startDiscovery(context)
     } else {
       errorMessage = "Bluetooth permissions are required for discovery."
       Toast.makeText(context, "Bluetooth permissions denied.", Toast.LENGTH_LONG).show()
@@ -118,7 +122,7 @@ fun BluetoothDiscoveryScreen(
   ) { result ->
     if (isLocationEnabled(context)) {
       Toast.makeText(context, "Location enabled!", Toast.LENGTH_SHORT).show()
-      viewModel.startDiscovery()
+      viewModel.startDiscovery(context)
     } else {
       Toast.makeText(context, "Location not enabled. Please enable it to continue.", Toast.LENGTH_SHORT).show()
       errorMessage = "Location not enabled. Please enable it to continue."
@@ -187,7 +191,7 @@ fun BluetoothDiscoveryScreen(
       enableBtLauncher.launch(enableBtIntent)
     } else if (bluetoothAdapterInitialized(context) && isBluetoothEnabled(context) && !isRefreshing && bluetoothDevices.isEmpty()) {
       // Auto-start discovery if adapter is ready and no devices found yet
-      viewModel.startDiscovery()
+      viewModel.startDiscovery(context)
     }
   }
 
@@ -266,9 +270,12 @@ fun BluetoothDiscoveryScreen(
                 device = device,
                 onClick = {
                   if (device.bondState == BluetoothDevice.BOND_BONDED) {
-                    //onDeviceSelected(device.address) // Device already bonded, return it
                     Log.d("BluetoothDiscoveryScreen1", device.address)
                     navController.previousBackStackEntry?.savedStateHandle?.set("address", device.address)
+
+                    // Save the selected address to SharedPreferences
+                    sharedPreferences.edit().putString("printer_address", device.address).apply()
+
                     navController.popBackStack()
                   } else {
                     viewModel.pairDevice(device) // Initiate pairing

@@ -87,7 +87,7 @@ fun printPDF(context: Context) {
         context: Context,
         pdfUri: Uri?,
         pageNumber: Int,
-        addLeftMarginPx: Int = 0
+        addLeftMarginPx: Int = 90
     ): Bitmap? = withContext(Dispatchers.IO) {
         var fileDescriptor: ParcelFileDescriptor? = null
         var pdfRenderer: PdfRenderer? = null
@@ -99,7 +99,7 @@ fun printPDF(context: Context) {
             pdfRenderer = PdfRenderer(fileDescriptor)
             if (pageNumber < 0 || pageNumber >= pdfRenderer.pageCount) return@withContext null
             currentPage = pdfRenderer.openPage(pageNumber)
-            val scaleFactor = 200f / 72f // 200 dpi
+            val scaleFactor = 203f / 72f // 200 dpi
             val bitmap = Bitmap.createBitmap(
                 (currentPage.width * scaleFactor).toInt(),
                 (currentPage.height * scaleFactor).toInt(),

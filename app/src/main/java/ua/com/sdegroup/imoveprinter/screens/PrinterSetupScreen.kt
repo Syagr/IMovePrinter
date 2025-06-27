@@ -147,53 +147,48 @@ fun PrinterSetup(
     val pdfSentLabel = stringResource(id = R.string.pdf_sent_to_print)
     val versionCompletedLabel = stringResource(id = R.string.version_request_completed)
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(printerSetupLabel) },
-                actions = {
-                    IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = null)
-                    }
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
-                        if (pairedNames.isEmpty()) {
-                            DropdownMenuItem(
-                                text = { Text(noPairedDevicesLabel) },
-                                onClick = { menuExpanded = false }
-                            )
-                        } else {
-                            pairedNames.forEachIndexed { idx, name ->
-                                DropdownMenuItem(
-                                    text = { Text(name) },
-                                    onClick = {
-                                        selectedIndex = idx
-                                        menuExpanded = false
-                                    }
-                                )
+Scaffold(
+    topBar = {
+        TopAppBar(
+            title = { Text(printerSetupLabel) },
+            actions = {
+                // Компактный переключатель языка
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert, // Заменено на доступную иконку
+                        contentDescription = stringResource(id = R.string.select_language)
+                    )
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    val languages = listOf(
+                        stringResource(id = R.string.ukrainian),
+                        stringResource(id = R.string.english)
+                    )
+                    val languageCodes = listOf("en", "uk")
+                    languages.forEachIndexed { index, language ->
+                        DropdownMenuItem(
+                            text = { Text(language) },
+                            onClick = {
+                                onLanguageChange(languageCodes[index])
+                                menuExpanded = false
                             }
-                        }
+                        )
                     }
                 }
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { padding ->
-        Column(
-            Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            // Language Selector
-            LanguageSelector { selectedLanguage ->
-                onLanguageChange(selectedLanguage)
             }
-
-            Spacer(Modifier.height(16.dp))
-
+        )
+    },
+    snackbarHost = { SnackbarHost(snackbarHostState) }
+) { padding ->
+    Column(
+        Modifier
+            .padding(padding)
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
             // Connection Type Selector
             Row(
                 Modifier.fillMaxWidth(),
@@ -286,6 +281,13 @@ PrinterActionsGrid(
 
             // Status Text
             Text(statusText)
+
+                val selectedDeviceName = pairedDevices.getOrNull(selectedIndex)?.name ?: stringResource(id = R.string.no_paired_devices)
+                Text(
+                    text = selectedDeviceName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
         }
     }
 }

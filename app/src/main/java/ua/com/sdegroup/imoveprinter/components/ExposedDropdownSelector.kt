@@ -6,15 +6,22 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import androidx.compose.runtime.LaunchedEffect
+import android.util.Log
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.ui.res.stringResource // Добавлен импорт
 import ua.com.sdegroup.imoveprinter.R
-
 
 @OptIn(ExperimentalMaterial3Api::class) // ExposedDropdownMenuBox is often experimental
 @Composable
@@ -37,8 +44,6 @@ fun ExposedDropdownSelector(
       readOnly = true,
       trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
       modifier = Modifier.menuAnchor(), // This is important for the menu's positioning
-      //textStyle = TextStyle(fontSize = 12.sp, lineHeight = 0.5.em),
-      //shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
     )
 
     ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -59,20 +64,33 @@ fun ExposedDropdownSelector(
 fun LanguageSelector(onLanguageSelected: (String) -> Unit) {
     val languages = listOf(
         stringResource(id = R.string.english),
-        stringResource(id = R.string.ukrainian)
+        stringResource(id = R.string.ukrainian),
     )
-    val languageCodes = listOf("en", "uk")
+    val languageCodes = listOf("en", "uk") // Соответствующие коды языков
     var selectedLanguage by remember { mutableStateOf(languages[0]) }
+    var expanded by remember { mutableStateOf(false) }
 
-    ExposedDropdownSelector(
-        title = stringResource(id = R.string.select_language),
-        options = languages,
-        selectedOption = selectedLanguage,
-        onOptionSelected = { selected ->
-            selectedLanguage = selected
-            val index = languages.indexOf(selected)
-            val selectedCode = languageCodes[index]
-            onLanguageSelected(selectedCode)
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                imageVector = Icons.Default.Language, // Используем иконку языка
+                contentDescription = stringResource(id = R.string.select_language)
+            )
         }
-    )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            languages.forEachIndexed { index, language ->
+                DropdownMenuItem(
+                    text = { Text(language) },
+                    onClick = {
+                        selectedLanguage = language
+                        expanded = false
+                        onLanguageSelected(languageCodes[index])
+                    }
+                )
+            }
+        }
+    }
 }

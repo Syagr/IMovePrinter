@@ -231,6 +231,7 @@ PrinterActionsGrid(
                 printerStatus = withContext(Dispatchers.IO) {
                     viewModel.getStatus()
                 }
+                // Формируем строку статуса с подстановкой
                 statusText = "$printerStatusLabel: $printerStatus"
             }
         }

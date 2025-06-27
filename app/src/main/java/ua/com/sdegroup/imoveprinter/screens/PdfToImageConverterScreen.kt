@@ -36,6 +36,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import ua.com.sdegroup.imoveprinter.R
+import androidx.compose.ui.res.stringResource
 
 suspend fun convertPdfPageToBitmap(
   context: Context,
@@ -122,7 +124,7 @@ fun PdfToImageConverterScreen() {
         verticalArrangement = Arrangement.Center
     ) {
         Button(onClick = { pickPdfLauncher.launch(arrayOf("application/pdf")) }) {
-            Text("Select PDF")
+            Text(stringResource(id = R.string.select_pdf).toString())
         }
 
         Spacer(Modifier.height(16.dp))

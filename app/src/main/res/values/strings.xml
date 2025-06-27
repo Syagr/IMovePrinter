@@ -1,4 +1,39 @@
 <resources>
-    <string name="app_name">IMove Printer</string>
-    <string name="print_service_name">My Thermal Printer</string>
+    <string name="english">Англійська</string>
+    <string name="ukrainian">Українська</string>
+    <string name="select_language">Оберіть мову</string>
+    <string name="app_name">IMove Принтер</string>
+    <string name="print_service_name">Сервіс друку IMove</string>
+    <string name="bluetooth">Bluetooth</string>
+    <string name="wifi">WiFi</string>
+    <string name="usb">USB</string>
+    <string name="connection_type">Тип підключення</string>
+    <string name="printer_status">Статус принтера: %1$s</string>
+    <string name="disconnected_from_printer">Вимкнено від принтера</string>
+    <string name="test_receipt_sent">Тестову квитанцію відправлено</string>
+    <string name="pdf_sent_to_print">PDF надіслано на друк</string>
+    <string name="version_request_completed">Запит версії виконано</string>
+    <string name="select_pdf">Вибрати PDF</string>
+    <string name="convert_page">Конвертувати сторінку 1 в зображення</string>
+    <string name="no_pdf_selected">PDF не вибрано</string>
+    <string name="converting">Конвертація...</string>
+    <string name="no_image_generated">Зображення ще не створено або сталася помилка.</string>
+    <string name="selected_pdf">Вибраний PDF: %1$s</string>
+    <string name="connect_and_print">Підключитися та друкувати</string>
+    <string name="connection_successful">Підключення успішне</string>
+    <string name="connection_failed">Підключення не вдалося</string>
+    <string name="enter_printer_ip">Введіть IP принтера</string>
+    <string name="back">Назад</string>
+    <string name="wifi_discovery">Пошук WiFi</string>
+        <string name="connect">Підключити</string>
+    <string name="status">Статус</string>
+    <string name="disconnect">Відключити</string>
+    <string name="test_receipt">Тестова квитанція</string>
+    <string name="test_pdf">Тестовий PDF</string>
+    <string name="version">Версія</string>
+    
+    <string name="bluetooth_discovery">Пошук Bluetooth</string>
+    <string name="device_list">Список пристроїв</string>
+        <string name="printer_setup">Налаштування принтера</string>
+    <string name="no_paired_devices">Немає запарених пристроїв</string>
 </resources>

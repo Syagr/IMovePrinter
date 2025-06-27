@@ -35,101 +35,108 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.res.stringResource
+import ua.com.sdegroup.imoveprinter.R
 
 @Composable
 fun DropdownList(
-  itemList: List<String>,
-  selectedIndex: Int,
-  modifier: Modifier = Modifier,
-  onItemClick: (Int) -> Unit,
-  color: Color = MaterialTheme.colorScheme.onPrimary,
-  backgroundColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
+    itemList: List<String>,
+    selectedIndex: Int,
+    modifier: Modifier = Modifier,
+    onItemClick: (Int) -> Unit,
+    color: Color = MaterialTheme.colorScheme.onPrimary,
+    backgroundColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
 ) {
-  var showDropdown by remember { mutableStateOf(false) }
+    val connTypes = listOf(
+        stringResource(id = R.string.bluetooth),
+        stringResource(id = R.string.wifi),
+        stringResource(id = R.string.usb)
+    )
 
-  val popupBackground = MaterialTheme.colorScheme.onPrimaryContainer
+    var showDropdown by remember { mutableStateOf(false) }
+    val popupBackground = MaterialTheme.colorScheme.onPrimaryContainer
 
-  Column(
-    modifier = modifier,
-    horizontalAlignment = Alignment.CenterHorizontally
-  ) {
-    // Кнопка
-    Box(
-      modifier = Modifier
-        .fillMaxWidth()
-        .background(
-          brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
-            listOf(backgroundColor, backgroundColor.copy(alpha = 0.8f))
-          ),
-          shape = RoundedCornerShape(16.dp)
-        )
-        .clickable { showDropdown = !showDropdown }
-        .padding(vertical = 14.dp, horizontal = 18.dp),
-      contentAlignment = Alignment.Center
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-      TextWithTrailingIcon(
-        text = itemList[selectedIndex],
-        icon = Icons.Filled.ArrowDropDown,
-        color = color
-      )
-    }
-
-    // Выпадающее меню
-    AnimatedVisibility(
-      visible = showDropdown,
-      enter = fadeIn() + expandVertically(),
-      exit = fadeOut() + shrinkVertically()
-    ) {
-      Popup(
-        alignment = Alignment.TopCenter,
-        onDismissRequest = { showDropdown = false },
-        properties = PopupProperties(focusable = true)
-      ) {
-        ElevatedCard(
-          modifier = Modifier
-            .padding(top = 8.dp)
-            .fillMaxWidth(0.6f)
-            .heightIn(max = 240.dp),
-          shape = RoundedCornerShape(14.dp),
-          elevation = CardDefaults.elevatedCardElevation(12.dp),
-          colors = CardDefaults.cardColors(containerColor = popupBackground)
-        ) {
-          Column {
-            itemList.forEachIndexed { index, item ->
-              val isSelected = index == selectedIndex
-              val interactionSource = remember { MutableInteractionSource() }
-
-              Box(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .background(
-                    if (isSelected) popupBackground.copy(alpha = 0.2f)
-                    else Color.Transparent
-                  )
-                  .clickable(
-                    interactionSource = interactionSource,
-                    indication = null
-                  ) {
-                    onItemClick(index)
-                    showDropdown = false
-                  }
-                  .padding(vertical = 12.dp, horizontal = 18.dp),
-                contentAlignment = Alignment.CenterStart
-              ) {
-                Text(
-                  text = item,
-                  color = color,
-                  style = MaterialTheme.typography.bodyMedium
+        // Кнопка
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                        listOf(backgroundColor, backgroundColor.copy(alpha = 0.8f))
+                    ),
+                    shape = RoundedCornerShape(16.dp)
                 )
-              }
-
-              if (index != itemList.lastIndex) {
-                Divider(color = color.copy(alpha = 0.1f), thickness = 1.dp)
-              }
-            }
-          }
+                .clickable { showDropdown = !showDropdown }
+                .padding(vertical = 14.dp, horizontal = 18.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            TextWithTrailingIcon(
+                text = itemList[selectedIndex],
+                icon = Icons.Filled.ArrowDropDown,
+                color = color
+            )
         }
-      }
+
+        // Выпадающее меню
+        AnimatedVisibility(
+            visible = showDropdown,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Popup(
+                alignment = Alignment.TopCenter,
+                onDismissRequest = { showDropdown = false },
+                properties = PopupProperties(focusable = true)
+            ) {
+                ElevatedCard(
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .fillMaxWidth(0.6f)
+                        .heightIn(max = 240.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    elevation = CardDefaults.elevatedCardElevation(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = popupBackground)
+                ) {
+                    Column {
+                        itemList.forEachIndexed { index, item ->
+                            val isSelected = index == selectedIndex
+                            val interactionSource = remember { MutableInteractionSource() }
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        if (isSelected) popupBackground.copy(alpha = 0.2f)
+                                        else Color.Transparent
+                                    )
+                                    .clickable(
+                                        interactionSource = interactionSource,
+                                        indication = null
+                                    ) {
+                                        onItemClick(index)
+                                        showDropdown = false
+                                    }
+                                    .padding(vertical = 12.dp, horizontal = 18.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = item,
+                                    color = color,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+
+                            if (index != itemList.lastIndex) {
+                                Divider(color = color.copy(alpha = 0.1f), thickness = 1.dp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
-  }
 }

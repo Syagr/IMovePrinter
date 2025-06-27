@@ -36,7 +36,10 @@ import ua.com.sdegroup.imoveprinter.components.DropdownList
 import ua.com.sdegroup.imoveprinter.factory.PrinterModelFactory
 import ua.com.sdegroup.imoveprinter.model.PrinterModel
 import ua.com.sdegroup.imoveprinter.ui.theme.IMovePrinterTheme
-
+import ua.com.sdegroup.imoveprinter.components.LanguageSelector
+import ua.com.sdegroup.imoveprinter.MainActivity
+import ua.com.sdegroup.imoveprinter.R
+import androidx.compose.ui.res.stringResource
 @SuppressLint("ServiceCast")
 fun getBluetoothAdapter(context: Context): BluetoothAdapter? {
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -62,8 +65,10 @@ fun unpairDevice(device: BluetoothDevice): Boolean {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrinterSetup(
-    navController: NavHostController = rememberNavController(),
-    backStackEntry: NavBackStackEntry
+    navController: NavHostController,
+    backStackEntry: NavBackStackEntry,
+    currentLanguage: String,
+    onLanguageChange: (String) -> Unit
 ) {
     val context = LocalContext.current
     val viewModel: PrinterModel = viewModel(factory = PrinterModelFactory(backStackEntry.savedStateHandle))
@@ -132,13 +137,23 @@ fun PrinterSetup(
         return Formatter.formatIpAddress(dhcp.gateway)
     }
 
+    // Переменные для строковых ресурсов
+    val printerSetupLabel = stringResource(id = R.string.printer_setup)
+    val noPairedDevicesLabel = stringResource(id = R.string.no_paired_devices)
+    val connectionTypeLabel = stringResource(id = R.string.connection_type)
+    val printerStatusLabel = stringResource(id = R.string.printer_status)
+    val disconnectedLabel = stringResource(id = R.string.disconnected_from_printer)
+    val receiptSentLabel = stringResource(id = R.string.test_receipt_sent)
+    val pdfSentLabel = stringResource(id = R.string.pdf_sent_to_print)
+    val versionCompletedLabel = stringResource(id = R.string.version_request_completed)
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Налаштування принтера") },
+                title = { Text(printerSetupLabel) },
                 actions = {
                     IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "Вибрати принтер")
+                        Icon(Icons.Filled.MoreVert, contentDescription = null)
                     }
                     DropdownMenu(
                         expanded = menuExpanded,
@@ -146,7 +161,7 @@ fun PrinterSetup(
                     ) {
                         if (pairedNames.isEmpty()) {
                             DropdownMenuItem(
-                                text = { Text("Немає запарених пристроїв") },
+                                text = { Text(noPairedDevicesLabel) },
                                 onClick = { menuExpanded = false }
                             )
                         } else {
@@ -161,22 +176,31 @@ fun PrinterSetup(
                             }
                         }
                     }
-                })
+                }
+            )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {}) { padding ->
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
         Column(
             Modifier
                 .padding(padding)
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
+            // Language Selector
+            LanguageSelector { selectedLanguage ->
+                onLanguageChange(selectedLanguage)
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Connection Type Selector
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Тип підключення")
+                Text(connectionTypeLabel)
                 DropdownList(
                     itemList = connTypes,
                     selectedIndex = selType,
@@ -184,83 +208,83 @@ fun PrinterSetup(
                     onItemClick = { selType = it }
                 )
             }
+
             Spacer(Modifier.height(16.dp))
 
-            PrinterActionsGrid(
-                onConnect = {
-                    when (connTypes[selType]) {
-                        "Bluetooth" -> {
-                            navController.navigate("bluetooth_discovery")
-                            pairedDevices.getOrNull(selectedIndex)?.address?.let {
-                                viewModel.setAddress(pairedDevices[selectedIndex].address)
-                                scope.launch { viewModel.connect(context, 0) }
-                            }
-                        }
-                        "WiFi" -> {
-                            navController.navigate("wifi_discovery")
-                        }
-                        "USB" -> {}
-                    }
-                },
-                onStatus = {
-                    val selectedDevice = pairedDevices.getOrNull(selectedIndex)
-                    selectedDevice?.address?.let {
-                        viewModel.setAddress(it)
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                viewModel.connect(context, 0)
-                            }
-                            printerStatus = withContext(Dispatchers.IO) {
-                                viewModel.getStatus()
-                            }
-                            statusText = "Статус принтера: $printerStatus"
-                        }
-                    }
-                },
-                onDisconnect = {
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            viewModel.disconnect()
-                            val device = pairedDevices.getOrNull(selectedIndex)
-                            if (device != null) {
-                                val success = unpairDevice(device)
-                                Log.d("PrinterSetup", "Результат розпарювання: $success")
-                            }
-                        }
-                        refreshKey++
-                        statusText = "Вимкнено від принтера"
-                    }
-                },
-                onPrintReceipt = {
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            viewModel.connect(context, 0)
-                            viewModel.printTestReceipt()
-                        }
-                        statusText = "Тестову квитанцію відправлено"
-                    }
-                },
-                onPrintPDF = {
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            viewModel.connect(context, 0)
-                            viewModel.printPDF(context)
-                        }
-                        statusText = "PDF надіслано на друк"
-                    }
-                },
-                onVersion = {
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            viewModel.getVersion()
-                        }
-                        statusText = "Версія запиту виконана"
-                    }
+PrinterActionsGrid(
+    onConnect = {
+        when (connTypes[selType]) {
+            "Bluetooth" -> {
+                navController.navigate("bluetooth_discovery")
+                pairedDevices.getOrNull(selectedIndex)?.address?.let {
+                    viewModel.setAddress(it)
+                    scope.launch { viewModel.connect(context, 0) }
                 }
-
-            )
+            }
+            "WiFi" -> navController.navigate("wifi_discovery")
+            "USB" -> { /* USB connection logic */ }
+        }
+    },
+    onStatus = {
+        val selectedDevice = pairedDevices.getOrNull(selectedIndex)
+        selectedDevice?.address?.let {
+            viewModel.setAddress(it)
+            scope.launch {
+                withContext(Dispatchers.IO) {
+                    viewModel.connect(context, 0)
+                }
+                printerStatus = withContext(Dispatchers.IO) {
+                    viewModel.getStatus()
+                }
+                statusText = "$printerStatusLabel: $printerStatus"
+            }
+        }
+    },
+    onDisconnect = {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                viewModel.disconnect()
+                val device = pairedDevices.getOrNull(selectedIndex)
+                if (device != null) {
+                    val success = unpairDevice(device)
+                    Log.d("PrinterSetup", "Unpair result: $success")
+                }
+            }
+            refreshKey++
+            statusText = disconnectedLabel
+        }
+    },
+    onPrintReceipt = {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                viewModel.connect(context, 0)
+                viewModel.printTestReceipt()
+            }
+            statusText = receiptSentLabel
+        }
+    },
+    onPrintPDF = {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                viewModel.connect(context, 0)
+                viewModel.printPDF(context)
+            }
+            statusText = pdfSentLabel
+        }
+    },
+    onVersion = {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                viewModel.getVersion()
+            }
+            statusText = versionCompletedLabel
+        }
+    }
+)
 
             Spacer(Modifier.height(16.dp))
+
+            // Status Text
             Text(statusText)
         }
     }
@@ -272,7 +296,9 @@ fun PrinterSetupPreview() {
     IMovePrinterTheme {
         PrinterSetup(
             navController = rememberNavController(),
-            backStackEntry = rememberNavController().currentBackStackEntry!!
+            backStackEntry = rememberNavController().currentBackStackEntry!!,
+            currentLanguage = "en", // Укажите язык по умолчанию
+            onLanguageChange = {} // Передайте пустую лямбду для тестирования
         )
     }
 }

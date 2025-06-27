@@ -59,14 +59,17 @@ import androidx.navigation.NavController
 import ua.com.sdegroup.imoveprinter.ui.theme.IMovePrinterTheme
 import ua.com.sdegroup.imoveprinter.viewmodel.BluetoothViewModel
 import ua.com.sdegroup.imoveprinter.viewmodel.BluetoothState
+import androidx.compose.ui.res.stringResource
+import ua.com.sdegroup.imoveprinter.R
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
 @Composable
 fun BluetoothDiscoveryScreen(
-  //onDeviceSelected: (String) -> Unit, // Callback to return selected address to Activity
-  //tag: Int // Original 'tag' from intent
-  navController: NavController
+    navController: NavController,
+    currentLanguage: String,
+    onLanguageChange: (String) -> Unit
 ) {
   val context = LocalContext.current
   val viewModel: BluetoothViewModel = viewModel()
@@ -198,20 +201,15 @@ fun BluetoothDiscoveryScreen(
   Scaffold(
     topBar = {
       TopAppBar(
-        title = { Text("Пристрої Bluetooth") },
-        navigationIcon = {
-          IconButton(onClick = { navController.popBackStack() }) {
-            Icon(
-              imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-              contentDescription = "Back"
-            )
+          title = { Text(stringResource(id = R.string.bluetooth_discovery).toString()) },
+          navigationIcon = {
+              IconButton(onClick = { navController.popBackStack() }) {
+                  Icon(
+                      imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                      contentDescription = stringResource(id = R.string.back).toString()
+                  )
+              }
           }
-        },
-        /*colors = TopAppBarDefaults.topAppBarColors(
-          containerColor = MaterialTheme.colorScheme.primary,
-          titleContentColor = MaterialTheme.colorScheme.onPrimary,
-          navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
-        )*/
       )
     }
   ) { paddingValues -> // Important: Apply paddingValues to your content!

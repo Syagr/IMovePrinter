@@ -24,6 +24,8 @@ import androidx.navigation.NavController
 import cpcl.PrinterHelper
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import ua.com.sdegroup.imoveprinter.R
+import androidx.compose.ui.res.stringResource
 
 fun sendCpclCommand(ip: String, port: Int, cpcl: String): Boolean {
     return try {
@@ -43,7 +45,11 @@ fun sendCpclCommand(ip: String, port: Int, cpcl: String): Boolean {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WifiDiscoveryScreen(navController: NavController) {
+fun WifiDiscoveryScreen(
+    navController: NavController,
+    currentLanguage: String,
+    onLanguageChange: (String) -> Unit
+) {
     val context = LocalContext.current
     var ipInput by remember { mutableStateOf("192.168.1.1") }
     var connectionStatus by remember { mutableStateOf("") }
@@ -52,12 +58,12 @@ fun WifiDiscoveryScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Wi-Fi принтер") },
+                title = { Text(stringResource(id = R.string.wifi_discovery).toString()) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад"
+                            contentDescription = stringResource(id = R.string.back).toString()
                         )
                     }
                 },
@@ -76,7 +82,7 @@ fun WifiDiscoveryScreen(navController: NavController) {
             OutlinedTextField(
                 value = ipInput,
                 onValueChange = { ipInput = it },
-                label = { Text("Введіть IP принтер") },
+                label = { Text(stringResource(id = R.string.enter_printer_ip)) },
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -93,24 +99,20 @@ fun WifiDiscoveryScreen(navController: NavController) {
 
             Spacer(Modifier.height(20.dp))
 
+            val successMessage = stringResource(id = R.string.connection_successful)
+            val failureMessage = stringResource(id = R.string.connection_failed)
+            
             Button(
                 onClick = {
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
                             PrinterHelper.portOpenWIFI(context, ipInput)
                         }
-
-                        if (result == 0) {
-                            PrinterHelper.printAreaSize("0", "200", "200", "100", "1")
-                            PrinterHelper.Text(PrinterHelper.TEXT, "4", "0", "30", "40", "CPCL TEST")
-                            PrinterHelper.Form()
-                            val printResult = PrinterHelper.Print()
-                            connectionStatus = if (printResult > 0)
-                                "Друк успішно відправлено"
-                            else
-                                "Помилка друку"
+            
+                        connectionStatus = if (result == 0) {
+                            successMessage
                         } else {
-                            connectionStatus = "Не вдалося підключитися до принтера ($ipInput)"
+                            failureMessage
                         }
                     }
                 },
@@ -119,7 +121,7 @@ fun WifiDiscoveryScreen(navController: NavController) {
                     .padding(horizontal = 8.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Підключитися та надрукувати")
+                Text(stringResource(id = R.string.connect_and_print))
             }
 
             Spacer(Modifier.height(24.dp))
@@ -127,8 +129,11 @@ fun WifiDiscoveryScreen(navController: NavController) {
             Text(
                 text = connectionStatus,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (connectionStatus.contains("Успішно")) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.error
+                color = if (connectionStatus.contains(stringResource(id = R.string.connection_successful))) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.error
+                }
             )
         }
     }

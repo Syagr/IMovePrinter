@@ -12,6 +12,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import ua.com.sdegroup.imoveprinter.R
+
 
 @OptIn(ExperimentalMaterial3Api::class) // ExposedDropdownMenuBox is often experimental
 @Composable
@@ -50,4 +53,26 @@ fun ExposedDropdownSelector(
       }
     }
   }
+}
+
+@Composable
+fun LanguageSelector(onLanguageSelected: (String) -> Unit) {
+    val languages = listOf(
+        stringResource(id = R.string.english),
+        stringResource(id = R.string.ukrainian)
+    )
+    val languageCodes = listOf("en", "uk")
+    var selectedLanguage by remember { mutableStateOf(languages[0]) }
+
+    ExposedDropdownSelector(
+        title = stringResource(id = R.string.select_language),
+        options = languages,
+        selectedOption = selectedLanguage,
+        onOptionSelected = { selected ->
+            selectedLanguage = selected
+            val index = languages.indexOf(selected)
+            val selectedCode = languageCodes[index]
+            onLanguageSelected(selectedCode)
+        }
+    )
 }

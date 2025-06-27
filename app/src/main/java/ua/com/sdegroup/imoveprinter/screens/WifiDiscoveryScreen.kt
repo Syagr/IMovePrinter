@@ -26,6 +26,8 @@ import cpcl.PrinterHelper
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import ua.com.sdegroup.imoveprinter.model.PrinterModel
+import ua.com.sdegroup.imoveprinter.R
+import androidx.compose.ui.res.stringResource
 
 fun sendCpclCommand(ip: String, port: Int, cpcl: String): Boolean {
     return try {
@@ -45,7 +47,11 @@ fun sendCpclCommand(ip: String, port: Int, cpcl: String): Boolean {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WifiDiscoveryScreen(navController: NavController) {
+fun WifiDiscoveryScreen(
+    navController: NavController,
+    currentLanguage: String,
+    onLanguageChange: (String) -> Unit
+) {
     val context = LocalContext.current
     val printerModel: PrinterModel = viewModel()
     var ipInput by remember { mutableStateOf("192.168.1.1") }
@@ -55,12 +61,12 @@ fun WifiDiscoveryScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Wi-Fi принтер") },
+                title = { Text(stringResource(id = R.string.wifi_discovery).toString()) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад"
+                            contentDescription = stringResource(id = R.string.back).toString()
                         )
                     }
                 },
@@ -79,7 +85,7 @@ fun WifiDiscoveryScreen(navController: NavController) {
             OutlinedTextField(
                 value = ipInput,
                 onValueChange = { ipInput = it },
-                label = { Text("Введіть IP принтер") },
+                label = { Text(stringResource(id = R.string.enter_printer_ip)) },
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -96,19 +102,14 @@ fun WifiDiscoveryScreen(navController: NavController) {
 
             Spacer(Modifier.height(20.dp))
 
+            val successMessage = stringResource(id = R.string.connection_successful)
+            val failureMessage = stringResource(id = R.string.connection_failed)
+            
             Button(
                 onClick = {
                     scope.launch {
                         val connected = withContext(Dispatchers.IO) {
                             printerModel.connectToPrinter(context, "WiFi", ipInput)
-                        }
-
-                        if (connected) {
-                            connectionStatus = "Підключено до принтера ($ipInput)"
-                            navController.previousBackStackEntry?.savedStateHandle?.set("wifi_ip", ipInput)
-                            navController.popBackStack()
-                        } else {
-                            connectionStatus = "Не вдалося підключитися до принтера ($ipInput)"
                         }
                     }
                 },
@@ -117,7 +118,7 @@ fun WifiDiscoveryScreen(navController: NavController) {
                     .padding(horizontal = 8.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Підключитися та надрукувати")
+                Text(stringResource(id = R.string.connect_and_print))
             }
 
             Spacer(Modifier.height(24.dp))
@@ -125,8 +126,11 @@ fun WifiDiscoveryScreen(navController: NavController) {
             Text(
                 text = connectionStatus,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (connectionStatus.contains("Успішно")) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.error
+                color = if (connectionStatus.contains(stringResource(id = R.string.connection_successful))) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.error
+                }
             )
         }
     }

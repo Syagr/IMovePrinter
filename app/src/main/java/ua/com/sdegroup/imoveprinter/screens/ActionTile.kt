@@ -22,8 +22,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ua.com.sdegroup.imoveprinter.R
 
 @Composable
 fun ActionTile(
@@ -74,12 +76,12 @@ fun PrinterActionsGrid(
     onVersion: () -> Unit
 ) {
     val actions = listOf(
-        Triple(Icons.Filled.Link,        "Підключитися",      onConnect),
-        Triple(Icons.Filled.Info,        "Статус",       onStatus),
-        Triple(Icons.Filled.Close,       "Відключити",   onDisconnect),
-        Triple(Icons.Filled.Print,       "Тест Квитанція", onPrintReceipt),
-        Triple(Icons.Filled.PictureAsPdf,"Тест PDF",     onPrintPDF),
-        Triple(Icons.Filled.Settings,    "Версія",      onVersion),
+        Triple(Icons.Filled.Link, stringResource(id = R.string.connect), onConnect),
+        Triple(Icons.Filled.Info, stringResource(id = R.string.status), onStatus),
+        Triple(Icons.Filled.Close, stringResource(id = R.string.disconnect), onDisconnect),
+        Triple(Icons.Filled.Print, stringResource(id = R.string.test_receipt), onPrintReceipt),
+        Triple(Icons.Filled.PictureAsPdf, stringResource(id = R.string.test_pdf), onPrintPDF),
+        Triple(Icons.Filled.Settings, stringResource(id = R.string.version), onVersion),
     )
 
     LazyVerticalGrid(

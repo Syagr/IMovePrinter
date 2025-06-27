@@ -36,7 +36,10 @@ import ua.com.sdegroup.imoveprinter.components.DropdownList
 import ua.com.sdegroup.imoveprinter.factory.PrinterModelFactory
 import ua.com.sdegroup.imoveprinter.model.PrinterModel
 import ua.com.sdegroup.imoveprinter.ui.theme.IMovePrinterTheme
-
+import ua.com.sdegroup.imoveprinter.components.LanguageSelector
+import ua.com.sdegroup.imoveprinter.MainActivity
+import ua.com.sdegroup.imoveprinter.R
+import androidx.compose.ui.res.stringResource
 @SuppressLint("ServiceCast")
 fun getBluetoothAdapter(context: Context): BluetoothAdapter? {
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -62,8 +65,10 @@ fun unpairDevice(device: BluetoothDevice): Boolean {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrinterSetup(
-    navController: NavHostController = rememberNavController(),
-    backStackEntry: NavBackStackEntry
+    navController: NavHostController,
+    backStackEntry: NavBackStackEntry,
+    currentLanguage: String,
+    onLanguageChange: (String) -> Unit
 ) {
     val context = LocalContext.current
     val viewModel: PrinterModel =
@@ -142,51 +147,65 @@ fun PrinterSetup(
         return Formatter.formatIpAddress(dhcp.gateway)
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Налаштування принтера") },
-                actions = {
-                    IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "Вибрати принтер")
-                    }
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
-                        if (pairedNames.isEmpty()) {
-                            DropdownMenuItem(
-                                text = { Text("Немає запарених пристроїв") },
-                                onClick = { menuExpanded = false }
-                            )
-                        } else {
-                            pairedNames.forEachIndexed { idx, name ->
-                                DropdownMenuItem(
-                                    text = { Text(name) },
-                                    onClick = {
-                                        selectedIndex = idx
-                                        menuExpanded = false
-                                    }
-                                )
+    // Переменные для строковых ресурсов
+    val printerSetupLabel = stringResource(id = R.string.printer_setup)
+    val noPairedDevicesLabel = stringResource(id = R.string.no_paired_devices)
+    val connectionTypeLabel = stringResource(id = R.string.connection_type)
+    val printerStatusLabel = stringResource(id = R.string.printer_status)
+    val disconnectedLabel = stringResource(id = R.string.disconnected_from_printer)
+    val receiptSentLabel = stringResource(id = R.string.test_receipt_sent)
+    val pdfSentLabel = stringResource(id = R.string.pdf_sent_to_print)
+    val versionCompletedLabel = stringResource(id = R.string.version_request_completed)
+
+Scaffold(
+    topBar = {
+        TopAppBar(
+            title = { Text(printerSetupLabel) },
+            actions = {
+                // Компактный переключатель языка
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert, // Заменено на доступную иконку
+                        contentDescription = stringResource(id = R.string.select_language)
+                    )
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    val languages = listOf(
+                        stringResource(id = R.string.ukrainian),
+                        stringResource(id = R.string.english)
+                    )
+                    val languageCodes = listOf("en", "uk")
+                    languages.forEachIndexed { index, language ->
+                        DropdownMenuItem(
+                            text = { Text(language) },
+                            onClick = {
+                                onLanguageChange(languageCodes[index])
+                                menuExpanded = false
                             }
-                        }
+                        )
                     }
-                })
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {}) { padding ->
-        Column(
-            Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
+                }
+            }
+        )
+    },
+    snackbarHost = { SnackbarHost(snackbarHostState) }
+) { padding ->
+    Column(
+        Modifier
+            .padding(padding)
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+            // Connection Type Selector
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Тип підключення")
+                Text(connectionTypeLabel)
                 DropdownList(
                     itemList = connTypes,
                     selectedIndex = selType,
@@ -194,6 +213,7 @@ fun PrinterSetup(
                     onItemClick = { selType = it }
                 )
             }
+
             Spacer(Modifier.height(16.dp))
 
             PrinterActionsGrid(
@@ -244,7 +264,7 @@ fun PrinterSetup(
                             "Не вдалося підключитися до принтера"
                         }
 
-                        statusText = "Статус принтера: $printerStatus"
+                        statusText = "$printerStatusLabel: $printerStatus"
                     }
                 },
                 onDisconnect = {
@@ -258,7 +278,7 @@ fun PrinterSetup(
                             }
                         }
                         refreshKey++
-                        statusText = "Вимкнено від принтера"
+                        statusText = disconnectedLabel
                     }
                 },
                 onPrintReceipt = {
@@ -269,7 +289,7 @@ fun PrinterSetup(
                             }
                             viewModel.printTestReceipt()
                         }
-                        statusText = "Тестову квитанцію відправлено"
+                        statusText = receiptSentLabel
                     }
                 },
                 onPrintPDF = {
@@ -280,7 +300,7 @@ fun PrinterSetup(
                             }
                             viewModel.printPDF(context)
                         }
-                        statusText = "PDF надіслано на друк"
+                        statusText = pdfSentLabel
                     }
                 },
                 onVersion = {
@@ -288,14 +308,22 @@ fun PrinterSetup(
                         withContext(Dispatchers.IO) {
                             viewModel.getVersion()
                         }
-                        statusText = "Версія запиту виконана"
+                        statusText = versionCompletedLabel
                     }
                 }
-
             )
 
             Spacer(Modifier.height(16.dp))
+
+            // Status Text
             Text(statusText)
+
+                val selectedDeviceName = pairedDevices.getOrNull(selectedIndex)?.name ?: stringResource(id = R.string.no_paired_devices)
+                Text(
+                    text = selectedDeviceName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
         }
     }
 }
@@ -306,7 +334,9 @@ fun PrinterSetupPreview() {
     IMovePrinterTheme {
         PrinterSetup(
             navController = rememberNavController(),
-            backStackEntry = rememberNavController().currentBackStackEntry!!
+            backStackEntry = rememberNavController().currentBackStackEntry!!,
+            currentLanguage = "en",
+            onLanguageChange = {}
         )
     }
 }

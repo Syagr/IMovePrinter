@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <print-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:label="@string/print_service_name"
-    android:settingsActivity="ua.com.sdegroup.imoveprinter.PrinterSettingsActivity"/>
+    android:vendor="@string/app_name"
+    android:settingsActivity="ua.com.sdegroup.imoveprinter.PrinterSettingsActivity">
+    <printer-capability-resources
+        android:resource="@array/thermal_printer_capabilities" />
+</print-service>

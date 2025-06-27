@@ -192,6 +192,7 @@ fun PrinterSetup(
                         "Bluetooth" -> {
                             navController.navigate("bluetooth_discovery")
                             pairedDevices.getOrNull(selectedIndex)?.address?.let {
+                                viewModel.setAddress(pairedDevices[selectedIndex].address)
                                 scope.launch { viewModel.connect(context, 0) }
                             }
                         }

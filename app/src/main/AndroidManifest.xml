@@ -22,11 +22,11 @@
         android:debuggable="true"
         android:extractNativeLibs="false"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/printer_setup"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@mipmap/printer_setup"
         android:supportsRtl="true"
-        android:testOnly="true"
+        android:testOnly="false"
         android:theme="@style/Theme.IMovePrinter" >
         <activity
             android:name=".MainActivity"

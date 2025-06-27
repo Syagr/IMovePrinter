@@ -56,19 +56,21 @@ class PrinterModel(
             null
         }
     }
-fun printPDF(context: Context) {
-    // Пример: печать первой страницы report.pdf из assets
-    val pdfUri = getPdfUriFromAssets(context, "report.pdf")
-    if (pdfUri != null) {
-        // Запускаем корутину для асинхронной печати
-        kotlinx.coroutines.CoroutineScope(Dispatchers.Main).launch {
-            val result = printPdfOnBluetooth(context, pdfUri, 0)
-            Log.d(TAG, "PDF print result: $result")
+
+    fun printPDF(context: Context) {
+        // Пример: печать первой страницы report.pdf из assets
+        val pdfUri = getPdfUriFromAssets(context, "report.pdf")
+        if (pdfUri != null) {
+            // Запускаем корутину для асинхронной печати
+            kotlinx.coroutines.CoroutineScope(Dispatchers.Main).launch {
+                val result = printPdfOnBluetooth(context, pdfUri, 0)
+                Log.d(TAG, "PDF print result: $result")
+            }
+        } else {
+            Log.e(TAG, "PDF file not found in assets")
         }
-    } else {
-        Log.e(TAG, "PDF file not found in assets")
     }
-}
+
     /**
      * Добавляет левое поле к bitmap (например, для термопринтера).
      */
@@ -109,7 +111,10 @@ fun printPDF(context: Context) {
             )
             bitmap.eraseColor(Color.WHITE)
             currentPage.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            return@withContext if (addLeftMarginPx > 0) addLeftMargin(bitmap, addLeftMarginPx) else bitmap
+            return@withContext if (addLeftMarginPx > 0) addLeftMargin(
+                bitmap,
+                addLeftMarginPx
+            ) else bitmap
         } catch (e: IOException) {
             e.printStackTrace()
             null
@@ -152,20 +157,47 @@ fun printPDF(context: Context) {
 
     fun connect(context: Context, mode: Int) {
         val address = receivedAddress.value
-        if (mode == 0) {
-            val isOpened = PrinterHelper.IsOpened()
-            Log.d(TAG, "Connecting: $address, isOpened: $isOpened")
-            if (!isOpened) {
-                val state = PrinterHelper.portOpenBT(context, address)
-                Log.d(TAG, "Connected: $state")
+        if (mode == 0 && !address.isNullOrBlank()) {
+            if (!PrinterHelper.IsOpened()) {
+                try {
+                    val result = PrinterHelper.portOpenBT(context, address)
+                    Log.d(TAG, "portOpenBT result: $result")
+                    if (result != 0) {
+                        Log.e(TAG, "Failed to connect to printer. Error code: $result")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Exception during Bluetooth connection", e)
+                }
             }
         }
     }
 
+    fun connectToPrinter(context: Context, type: String, addressOrIp: String): Boolean {
+        try {
+            // Закрыть предыдущие подключения
+            if (PrinterHelper.IsOpened()) {
+                PrinterHelper.portClose()
+                Thread.sleep(200)
+                Log.d(TAG, "Previous connection closed")
+            }
 
-    suspend fun getStatus(): String {
+            val result = when (type) {
+                "Bluetooth" -> PrinterHelper.portOpenBT(context, addressOrIp)
+                "WiFi" -> PrinterHelper.portOpenWIFI(context, addressOrIp)
+                else -> -99
+            }
+
+            Log.d(TAG, "Connection result ($type): $result")
+            return result == 0
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception during $type connection", e)
+            return false
+        }
+    }
+
+    suspend fun getStatus(type: String): String {
         delay(300)
-        return getBluetoothPrinterStatus()
+        return getPrinterStatus(type)
     }
 
     fun disconnect() {
@@ -179,40 +211,43 @@ fun printPDF(context: Context) {
     }
 
 
-fun getBluetoothPrinterStatus(): String {
-    return try {
-        Log.d(TAG, "getBluetoothPrinterStatus called")
-        if (!cpcl.PrinterHelper.IsOpened()) {
-            Log.e(TAG, "Printer port is not opened")
-            return "Не підключено"
+    fun getPrinterStatus(type: String): String {
+        return try {
+            Log.d(TAG, "getPrinterStatus called")
+            if (!PrinterHelper.IsOpened()) return "Не підключено"
+
+            if (type == "Bluetooth") {
+                when (PrinterHelper.getstatus()) {
+                    0 -> "Готовий"
+                    2 -> "Закінчився папір"
+                    6 -> "Кришка відкрита"
+                    -1 -> "Помилка зв'язку"
+                    else -> "Невідома помилка"
+                }
+            } else {
+                "Wi-Fi підключено"
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in getPrinterStatus", e)
+            "Status error: ${e.message}"
         }
-        val getStatus: Int = cpcl.PrinterHelper.getstatus()
-        Log.d(TAG, "Status: $getStatus")
-        when (getStatus) {
-            0 -> "Готовий"
-            2 -> "Закінчився папір"
-            6 -> "Кришка відкрита"
-            else -> "Помилка"
+    }
+
+    fun getVersion() {
+        try {
+            val model = cpcl.PrinterHelper.getPrintModel()
+            Log.e(TAG, "Model: $model")
+            val id = cpcl.PrinterHelper.getPrintID()
+            Log.e(TAG, "ID: $id")
+            val name = cpcl.PrinterHelper.getPrintName()
+            Log.e(TAG, "Name: $name")
+            val sn = cpcl.PrinterHelper.getPrintSN()
+            Log.e(TAG, "SN: $sn")
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-    } catch (e: Exception) {
-        Log.e(TAG, "Exception in getBluetoothPrinterStatus", e)
-        "Status error: ${e.message}"
     }
-}
-fun getVersion() {
-    try {
-        val model = cpcl.PrinterHelper.getPrintModel()
-        Log.e(TAG, "Model: $model")
-        val id = cpcl.PrinterHelper.getPrintID()
-        Log.e(TAG, "ID: $id")
-        val name = cpcl.PrinterHelper.getPrintName()
-        Log.e(TAG, "Name: $name")
-        val sn = cpcl.PrinterHelper.getPrintSN()
-        Log.e(TAG, "SN: $sn")
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
-}
+
     fun printTestReceipt() {
         try {
             val lines = arrayOf("Line1", "Line2", "Line3", "Line4")
@@ -233,8 +268,15 @@ fun getVersion() {
                 cpcl.PrinterHelper.PrintData(lines[i] + "\r\n")
             }
             cpcl.PrinterHelper.RowSetX("0")
+            cpcl.PrinterHelper.Form()
+            cpcl.PrinterHelper.Print()
         } catch (e: Exception) {
             Log.e(TAG, "PrintSampleReceipt: ${e.message}")
+        } finally {
+            if (PrinterHelper.IsOpened()) {
+                Log.d(TAG, "Closing port after test receipt")
+                PrinterHelper.portClose()
+            }
         }
     }
 
@@ -248,9 +290,20 @@ fun getVersion() {
     ): Boolean = withContext(Dispatchers.IO) {
         val pageBitmap = convertPdfPageToBitmap(context, pdfUri, pageNumber)
         if (pageBitmap != null) {
-            val result = cpcl.PrinterHelper.printBitmap(0, 0, 0, pageBitmap, 0, false, 1)
-            Log.e(TAG, "Pic result: $result")
-            return@withContext result == 0
+            try {
+                val result = PrinterHelper.printBitmap(0, 0, 0, pageBitmap, 0, false, 1)
+                PrinterHelper.Form()
+                PrinterHelper.Print()
+                Log.d(TAG, "PDF bitmap sent: result=$result")
+                return@withContext result == 0
+            } catch (e: Exception) {
+                Log.e(TAG, "printPdfOnBluetooth error", e)
+            } finally {
+                if (PrinterHelper.IsOpened()) {
+                    Log.d(TAG, "Closing port after PDF print")
+                    PrinterHelper.portClose()
+                }
+            }
         }
         false
     }

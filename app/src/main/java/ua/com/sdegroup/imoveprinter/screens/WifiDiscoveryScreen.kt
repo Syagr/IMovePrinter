@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import java.net.Socket
 import java.net.InetSocketAddress
@@ -24,6 +25,7 @@ import androidx.navigation.NavController
 import cpcl.PrinterHelper
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import ua.com.sdegroup.imoveprinter.model.PrinterModel
 
 fun sendCpclCommand(ip: String, port: Int, cpcl: String): Boolean {
     return try {
@@ -45,6 +47,7 @@ fun sendCpclCommand(ip: String, port: Int, cpcl: String): Boolean {
 @Composable
 fun WifiDiscoveryScreen(navController: NavController) {
     val context = LocalContext.current
+    val printerModel: PrinterModel = viewModel()
     var ipInput by remember { mutableStateOf("192.168.1.1") }
     var connectionStatus by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
@@ -96,19 +99,14 @@ fun WifiDiscoveryScreen(navController: NavController) {
             Button(
                 onClick = {
                     scope.launch {
-                        val result = withContext(Dispatchers.IO) {
-                            PrinterHelper.portOpenWIFI(context, ipInput)
+                        val connected = withContext(Dispatchers.IO) {
+                            printerModel.connectToPrinter(context, "WiFi", ipInput)
                         }
 
-                        if (result == 0) {
-                            PrinterHelper.printAreaSize("0", "200", "200", "100", "1")
-                            PrinterHelper.Text(PrinterHelper.TEXT, "4", "0", "30", "40", "CPCL TEST")
-                            PrinterHelper.Form()
-                            val printResult = PrinterHelper.Print()
-                            connectionStatus = if (printResult > 0)
-                                "Друк успішно відправлено"
-                            else
-                                "Помилка друку"
+                        if (connected) {
+                            connectionStatus = "Підключено до принтера ($ipInput)"
+                            navController.previousBackStackEntry?.savedStateHandle?.set("wifi_ip", ipInput)
+                            navController.popBackStack()
                         } else {
                             connectionStatus = "Не вдалося підключитися до принтера ($ipInput)"
                         }

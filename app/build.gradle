@@ -21,7 +21,18 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+        debug {
+            testCoverageEnabled = false
+            debuggable true
+            pseudoLocalesEnabled true
+        }
+        develop {
+            initWith debug
+            matchingFallbacks += ["debug"]
+            applicationIdSuffix ".dev"
+            versionNameSuffix "-dev"
         }
     }
     compileOptions {

@@ -66,7 +66,8 @@ fun PrinterSetup(
     backStackEntry: NavBackStackEntry
 ) {
     val context = LocalContext.current
-    val viewModel: PrinterModel = viewModel(factory = PrinterModelFactory(backStackEntry.savedStateHandle))
+    val viewModel: PrinterModel =
+        viewModel(factory = PrinterModelFactory(backStackEntry.savedStateHandle))
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -106,6 +107,17 @@ fun PrinterSetup(
     }
 
     val scope = rememberCoroutineScope()
+    var statusText by remember { mutableStateOf("") }
+    val selectedAddressFlow = backStackEntry.savedStateHandle.getStateFlow<String?>("address", null)
+    val selectedAddress by selectedAddressFlow.collectAsState()
+
+    LaunchedEffect(selectedAddress) {
+        selectedAddress?.let {
+            viewModel.setAddress(it)
+            scope.launch { viewModel.connect(context, 0) }
+            statusText = "Підключено до: $it"
+        }
+    }
     var expanded by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableStateOf(0) }
 
@@ -121,8 +133,6 @@ fun PrinterSetup(
     var menuExpanded by remember { mutableStateOf(false) }
     val connTypes = listOf("Bluetooth", "WiFi", "USB")
     var selType by rememberSaveable { mutableStateOf(0) }
-    var statusText by remember { mutableStateOf("") }
-    var selectedAddress by remember { mutableStateOf<String?>(null) }
     val wifiMgr = context.applicationContext
         .getSystemService(Context.WIFI_SERVICE) as WifiManager
 
@@ -191,30 +201,50 @@ fun PrinterSetup(
                     when (connTypes[selType]) {
                         "Bluetooth" -> {
                             navController.navigate("bluetooth_discovery")
-                            pairedDevices.getOrNull(selectedIndex)?.address?.let {
-                                viewModel.setAddress(pairedDevices[selectedIndex].address)
-                                scope.launch { viewModel.connect(context, 0) }
-                            }
                         }
+
                         "WiFi" -> {
                             navController.navigate("wifi_discovery")
                         }
-                        "USB" -> {}
+
+                        "USB" -> {
+                            // Реализация позже
+                        }
                     }
                 },
                 onStatus = {
-                    val selectedDevice = pairedDevices.getOrNull(selectedIndex)
-                    selectedDevice?.address?.let {
-                        viewModel.setAddress(it)
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                viewModel.connect(context, 0)
-                            }
-                            printerStatus = withContext(Dispatchers.IO) {
-                                viewModel.getStatus()
-                            }
-                            statusText = "Статус принтера: $printerStatus"
+                    scope.launch {
+                        val printerReady = withContext(Dispatchers.IO) {
+                            if (!cpcl.PrinterHelper.IsOpened()) {
+                                when (connTypes[selType]) {
+                                    "Bluetooth" -> {
+                                        val device = pairedDevices.getOrNull(selectedIndex)
+                                        device?.address?.let {
+                                            viewModel.setAddress(it)
+                                            viewModel.connect(context, 0)
+                                            cpcl.PrinterHelper.IsOpened()
+                                        } ?: false
+                                    }
+
+                                    "WiFi" -> {
+                                        val ip = resolvePrinterIp()
+                                        ip?.let {
+                                            viewModel.connectToPrinter(context, "WiFi", it)
+                                        } ?: false
+                                    }
+
+                                    else -> false
+                                }
+                            } else true
                         }
+
+                        printerStatus = if (printerReady) {
+                            withContext(Dispatchers.IO) { viewModel.getStatus(connTypes[selType]) }
+                        } else {
+                            "Не вдалося підключитися до принтера"
+                        }
+
+                        statusText = "Статус принтера: $printerStatus"
                     }
                 },
                 onDisconnect = {
@@ -234,7 +264,9 @@ fun PrinterSetup(
                 onPrintReceipt = {
                     scope.launch {
                         withContext(Dispatchers.IO) {
-                            viewModel.connect(context, 0)
+                            if (!cpcl.PrinterHelper.IsOpened()) {
+                                viewModel.connect(context, 0)
+                            }
                             viewModel.printTestReceipt()
                         }
                         statusText = "Тестову квитанцію відправлено"
@@ -243,7 +275,9 @@ fun PrinterSetup(
                 onPrintPDF = {
                     scope.launch {
                         withContext(Dispatchers.IO) {
-                            viewModel.connect(context, 0)
+                            if (!cpcl.PrinterHelper.IsOpened()) {
+                                viewModel.connect(context, 0)
+                            }
                             viewModel.printPDF(context)
                         }
                         statusText = "PDF надіслано на друк"

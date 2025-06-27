@@ -56,6 +56,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import ua.com.sdegroup.imoveprinter.model.PrinterModel
 import ua.com.sdegroup.imoveprinter.ui.theme.IMovePrinterTheme
 import ua.com.sdegroup.imoveprinter.viewmodel.BluetoothViewModel
 import ua.com.sdegroup.imoveprinter.viewmodel.BluetoothState
@@ -70,7 +71,7 @@ fun BluetoothDiscoveryScreen(
 ) {
   val context = LocalContext.current
   val viewModel: BluetoothViewModel = viewModel()
-
+  val printerModel: PrinterModel = viewModel()
   val bluetoothDevices by viewModel.bluetoothDevices.collectAsState()
   val isRefreshing by viewModel.isRefreshing.collectAsState()
   val bluetoothState by viewModel.bluetoothState.collectAsState()
@@ -167,11 +168,17 @@ fun BluetoothDiscoveryScreen(
       is BluetoothState.Bonded -> {
         showProgressDialog = false
         Toast.makeText(context, "Device bonded: ${state.deviceAddress}", Toast.LENGTH_SHORT).show()
-        // Return result to Activity immediately after successful bonding
-        //onDeviceSelected(state.deviceAddress)
-        Log.d("BluetoothDiscoveryScreen", state.deviceAddress)
+
+        sharedPreferences.edit().putString("printer_address", state.deviceAddress).apply()
+
+        printerModel.connectToPrinter(context, "Bluetooth", state.deviceAddress)
+
+        // Сохраняем адрес в navigation
+        navController.previousBackStackEntry?.savedStateHandle?.set("address", state.deviceAddress)
+
         navController.popBackStack()
       }
+
 
       BluetoothState.Discovering -> {
         showProgressDialog = false // Discovery itself doesn't need a dialog

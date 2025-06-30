@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
+import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.util.Log
@@ -39,9 +40,6 @@ class PrinterModel(
         }
     }
 
-    /**
-     * Копирует PDF из assets во временный файл и возвращает Uri.
-     */
     fun getPdfUriFromAssets(context: Context, assetFileName: String): Uri? {
         val tempFile = File(context.cacheDir, assetFileName)
         return try {
@@ -58,10 +56,8 @@ class PrinterModel(
     }
 
     fun printPDF(context: Context) {
-        // Пример: печать первой страницы report.pdf из assets
         val pdfUri = getPdfUriFromAssets(context, "report.pdf")
         if (pdfUri != null) {
-            // Запускаем корутину для асинхронной печати
             kotlinx.coroutines.CoroutineScope(Dispatchers.Main).launch {
                 val result = printPdfOnBluetooth(context, pdfUri, 0)
                 Log.d(TAG, "PDF print result: $result")
@@ -71,9 +67,6 @@ class PrinterModel(
         }
     }
 
-    /**
-     * Добавляет левое поле к bitmap (например, для термопринтера).
-     */
     fun addLeftMargin(originalBitmap: Bitmap, offset: Int): Bitmap {
         val width = originalBitmap.width + offset
         val height = originalBitmap.height
@@ -84,9 +77,6 @@ class PrinterModel(
         return newBitmap
     }
 
-    /**
-     * Конвертирует страницу PDF в Bitmap (асинхронно).
-     */
     suspend fun convertPdfPageToBitmap(
         context: Context,
         pdfUri: Uri?,
@@ -103,7 +93,7 @@ class PrinterModel(
             pdfRenderer = PdfRenderer(fileDescriptor)
             if (pageNumber < 0 || pageNumber >= pdfRenderer.pageCount) return@withContext null
             currentPage = pdfRenderer.openPage(pageNumber)
-            val scaleFactor = 203f / 72f // 200 dpi
+            val scaleFactor = 203f / 72f
             val bitmap = Bitmap.createBitmap(
                 (currentPage.width * scaleFactor).toInt(),
                 (currentPage.height * scaleFactor).toInt(),
@@ -130,9 +120,6 @@ class PrinterModel(
         Log.d(TAG, "Set Bluetooth address: $address")
     }
 
-    /**
-     * Сохраняет bitmap во внутреннее хранилище.
-     */
     fun saveBitmapToInternalStorage(
         context: Context,
         bitmap: Bitmap,
@@ -153,8 +140,6 @@ class PrinterModel(
         }
     }
 
-    // --- Методы для работы с Bluetooth-принтером через PrinterHelper (если используется) ---
-
     fun connect(context: Context, mode: Int) {
         val address = receivedAddress.value
         if (mode == 0 && !address.isNullOrBlank()) {
@@ -174,7 +159,6 @@ class PrinterModel(
 
     fun connectToPrinter(context: Context, type: String, addressOrIp: String): Boolean {
         try {
-            // Закрыть предыдущие подключения
             if (PrinterHelper.IsOpened()) {
                 PrinterHelper.portClose()
                 Thread.sleep(200)
@@ -184,6 +168,15 @@ class PrinterModel(
             val result = when (type) {
                 "Bluetooth" -> PrinterHelper.portOpenBT(context, addressOrIp)
                 "WiFi" -> PrinterHelper.portOpenWIFI(context, addressOrIp)
+                "USB" -> {
+                    val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+                    val usbDevice = usbManager.deviceList.values.firstOrNull {
+                        it.deviceName == addressOrIp
+                    } ?: return false.also { Log.e(TAG, "USB device not found: $addressOrIp") }
+
+                    PrinterHelper.portOpenUSB(context, usbDevice)
+                }
+
                 else -> -99
             }
 
@@ -194,6 +187,7 @@ class PrinterModel(
             return false
         }
     }
+
 
     suspend fun getStatus(type: String): String {
         delay(300)
@@ -280,9 +274,6 @@ class PrinterModel(
         }
     }
 
-    /**
-     * Асинхронная печать PDF-файла на Bluetooth-принтере через PrinterHelper.
-     */
     suspend fun printPdfOnBluetooth(
         context: Context,
         pdfUri: Uri?,

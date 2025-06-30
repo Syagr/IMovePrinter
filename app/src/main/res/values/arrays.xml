@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <array name="thermal_printer_capabilities">
-        <!-- должно совпадать с тем, что вы генерируете в onStartPrinterDiscovery -->
         <item>MY_THERMAL_PRINTER</item>
     </array>
 </resources>

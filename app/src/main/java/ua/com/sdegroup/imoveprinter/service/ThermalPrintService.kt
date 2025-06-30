@@ -1,9 +1,9 @@
 package ua.com.sdegroup.imoveprinter.service
 
 import android.content.Context
-import android.graphics.*
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
-import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.print.PrintAttributes
 import android.print.PrinterCapabilitiesInfo
@@ -13,39 +13,39 @@ import android.printservice.PrintJob
 import android.printservice.PrintService
 import android.printservice.PrinterDiscoverySession
 import android.util.Log
-import androidx.lifecycle.SavedStateHandle
 import cpcl.PrinterHelper
 import kotlinx.coroutines.*
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import ua.com.sdegroup.imoveprinter.model.PrinterModel
 
 class ThermalPrintService : PrintService() {
 
     private val TAG = "ThermalPrintService"
-    private val PRINTER_WIDTH_MM = 58f // стандартная ширина рулона, мм
-    private val PRINTER_DPI = 203     // разрешение принтера
-    private val PRINTER_WIDTH_PX = ((PRINTER_WIDTH_MM / 25.4f) * PRINTER_DPI).toInt() // ≈384px
+    private val PRINTER_WIDTH_MM = 58f
+    private val PRINTER_DPI = 203
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeJobs = mutableMapOf<String, Job>()
+
     override fun onCreatePrinterDiscoverySession(): PrinterDiscoverySession {
         Log.d(TAG, "onCreatePrinterDiscoverySession")
         return object : PrinterDiscoverySession() {
             override fun onStartPrinterDiscovery(printerIds: MutableList<PrinterId>) {
                 Log.d(TAG, "onStartPrinterDiscovery")
-                val id: PrinterId = generatePrinterId("MY_THERMAL_PRINTER")
-                val widthMils  = (PRINTER_WIDTH_MM / 25.4f * 1000).toInt()
+                val prefs = applicationContext
+                    .getSharedPreferences("printer_prefs", Context.MODE_PRIVATE)
+                val id = generatePrinterId("MY_THERMAL_PRINTER")
+                val label = prefs.getString("printer_name", "My Thermal Printer")
+                    ?: "My Thermal Printer"
+                val widthMils = (PRINTER_WIDTH_MM / 25.4f * 1000).toInt()
                 val heightMils = (200f / 25.4f * 1000).toInt()
                 val mediaSize = PrintAttributes.MediaSize(
-                    "THERMAL_58MM", "58 mm",
-                    widthMils, heightMils
+                    "THERMAL_58MM", "58 mm", widthMils, heightMils
                 )
-
                 val caps = PrinterCapabilitiesInfo.Builder(id)
                     .addMediaSize(mediaSize, true)
                     .addResolution(
-                        PrintAttributes.Resolution("default", "203×203 dpi", 203, 203),
+                        PrintAttributes.Resolution("default", "203×203", PRINTER_DPI, PRINTER_DPI),
                         true
                     )
                     .setColorModes(
@@ -53,31 +53,17 @@ class ThermalPrintService : PrintService() {
                         PrintAttributes.COLOR_MODE_MONOCHROME
                     )
                     .build()
-
-                val info = PrinterInfo.Builder(id, "My Thermal Printer", PrinterInfo.STATUS_IDLE)
+                val info = PrinterInfo.Builder(id, label, PrinterInfo.STATUS_IDLE)
                     .setCapabilities(caps)
                     .build()
-
                 addPrinters(listOf(info))
                 Log.d(TAG, "Printer added: $info")
             }
 
-            override fun onStopPrinterDiscovery() {
-                Log.d(TAG, "onStopPrinterDiscovery")
-            }
-
-            override fun onValidatePrinters(printerIds: MutableList<PrinterId>) {
-                Log.d(TAG, "onValidatePrinters: $printerIds")
-            }
-
-            override fun onStartPrinterStateTracking(printerId: PrinterId) {
-                Log.d(TAG, "onStartPrinterStateTracking: $printerId")
-            }
-
-            override fun onStopPrinterStateTracking(printerId: PrinterId) {
-                Log.d(TAG, "onStopPrinterStateTracking: $printerId")
-            }
-
+            override fun onStopPrinterDiscovery() = Unit
+            override fun onValidatePrinters(printerIds: MutableList<PrinterId>) = Unit
+            override fun onStartPrinterStateTracking(printerId: PrinterId) = Unit
+            override fun onStopPrinterStateTracking(printerId: PrinterId) = Unit
             override fun onDestroy() {
                 Log.d(TAG, "PrinterDiscoverySession destroyed")
             }
@@ -89,40 +75,43 @@ class ThermalPrintService : PrintService() {
             job.fail("Invalid job id"); return
         }
         job.start()
-
         val pfd = job.document?.data ?: run {
-            job.fail("No document data"); return
+            job.fail("No data"); return
         }
         val tempPdf = File(cacheDir, "print_$jobId.pdf")
-
-        // Сохраняем PDF и запускаем печать в IO-диспетчере
-        val co = serviceScope.launch {
+        serviceScope.launch {
             try {
                 pfd.use { fd ->
                     FileInputStream(fd.fileDescriptor).use { fis ->
                         FileOutputStream(tempPdf).use { fos ->
                             fis.copyTo(fos)
                         }
-                    }                }            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { job.fail("File copy error") }
-                return@launch
+                    }
+                }
+                val bitmap =
+                    convertPdfPageToBitmap(
+                        applicationContext,
+                        tempPdf,
+                        0,
+                        addLeftMarginPx = 90,
+                        addTopMarginPx = 90
+                    )
+                val ok = bitmap?.let { printBitmapOverBluetooth(it) } ?: false
+                withContext(Dispatchers.Main) {
+                    if (ok) job.complete() else job.fail("Print error")
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { job.fail("Error: ${e.message}") }
             }
-
-            val ok = sendPdfToThermalPrinterAsync(tempPdf, addLeftMarginPx = 90, addTopMarginPx = 50)
-            withContext(Dispatchers.Main) {
-                if (ok) job.complete() else job.fail("Send error")
-            }
-        }
-        activeJobs[jobId.toString()] = co
+        }.also { activeJobs[jobId.toString()] = it }
     }
 
     override fun onRequestCancelPrintJob(job: PrintJob) {
-        val id = job.info.id?.toString()
-            ?: return
-        serviceScope.launch {
+        job.info.id?.toString()?.let { id ->
             activeJobs.remove(id)?.cancel()
-            withContext(Dispatchers.Main) { job.cancel() }
-        }    }
+            CoroutineScope(Dispatchers.Main).launch { job.cancel() }
+        }
+    }
 
     override fun onDestroy() {
         super.onDestroy()
@@ -131,159 +120,84 @@ class ThermalPrintService : PrintService() {
         activeJobs.clear()
     }
 
-    private suspend fun sendPdfToThermalPrinterAsync(
-        pdfFile: File,
-        addLeftMarginPx: Int,
-        addTopMarginPx: Int
-    ): Boolean = withContext(Dispatchers.IO) {
-        Log.d(TAG, "sendPdfToThermalPrinter: ${pdfFile.path}")
-        try {
-            // 1) Рендерим первую страницу PDF в Bitmap
-            val uri = Uri.fromFile(pdfFile)
-            val bitmap = convertA4PdfToBitmap(applicationContext, uri, 0)
-                ?: return@withContext false
-
-            // 2) Обрезаем белые поля
-            val cropped = autoCropBitmap(bitmap)
-
-            // 3) Добавляем визуальные отступы
-            val withLeft = addLeftMargin(cropped, addLeftMarginPx)
-            val finalBmp  = addTopMargin(withLeft, addTopMarginPx)
-                .let { toMonoBitmap(it) }
-                .let { resizeBitmapToWidth(it, PRINTER_WIDTH_PX) }
-                .let { centerBitmapHorizontally(it, PRINTER_WIDTH_PX) }
-                .copy(Bitmap.Config.RGB_565, false)
-
-            // 4) Подключаемся к принтеру
-            val prefs   = applicationContext.getSharedPreferences("printer_prefs", Context.MODE_PRIVATE)
-            val address = prefs.getString("printer_address", "") ?: ""
-            if (address.isBlank()) return@withContext false
-            if (PrinterHelper.portOpenBT(applicationContext, address) != 0) {
-                PrinterHelper.portClose()
-                return@withContext false
-            }
-
-            // 5) Печатаем один раз, с нужными отступами
-            val result = PrinterHelper.printBitmap(
-                /* x = */ addLeftMarginPx,
-                /* y = */ addTopMarginPx,
-                /* type = */ 0,
-                /* bitmap = */ finalBmp,
-                /* compressType = */ 0,
-                /* isForm = */ false,
-                /* segments = */ 1
-            )
-            if (result != 0) {
-                PrinterHelper.portClose()
-                return@withContext false
-            }
-
-            // 6) Завершаем
-            PrinterHelper.Form()
-            PrinterHelper.Print()
-            PrinterHelper.portClose()
-            true
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error printing PDF", e)
-            false
-        }
-    }
-
-    // --- Вспомогательные методы ---
-
-    private fun addLeftMargin(src: Bitmap, marginPx: Int): Bitmap {
-        val w = src.width + marginPx
-        val h = src.height
-        val out = Bitmap.createBitmap(w, h, src.config ?: Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(out)
-        canvas.drawColor(Color.WHITE)
-        canvas.drawBitmap(src, marginPx.toFloat(), 0f, null)
-        return out
-    }
-
-    private fun addTopMargin(src: Bitmap, topPx: Int): Bitmap {
-        val out = Bitmap.createBitmap(src.width, src.height + topPx, src.config ?: Bitmap.Config.ARGB_8888)
-        Canvas(out).apply {
-            drawColor(Color.WHITE)
-            drawBitmap(src, 0f, topPx.toFloat(), null)
-        }
-        return out
-    }
-
-    private fun autoCropBitmap(bitmap: Bitmap): Bitmap {
-        var left = bitmap.width
-        var right = 0
-        for (x in 0 until bitmap.width)
-            for (y in 0 until bitmap.height)
-                if (bitmap.getPixel(x, y) != Color.WHITE) {
-                    left  = minOf(left, x)
-                    right = maxOf(right, x)
-                }
-        return if (left < right)
-            Bitmap.createBitmap(bitmap, left, 0, right - left + 1, bitmap.height)
-        else bitmap
-    }
-
-    private fun centerBitmapHorizontally(src: Bitmap, targetWidth: Int): Bitmap {
-        if (src.width >= targetWidth) return src
-        val left = (targetWidth - src.width) / 2
-        val out = Bitmap.createBitmap(targetWidth, src.height, src.config ?: Bitmap.Config.ARGB_8888)
-        Canvas(out).apply {
-            drawColor(Color.WHITE)
-            drawBitmap(src, left.toFloat(), 0f, null)
-        }
-        return out
-    }
-
-    private fun resizeBitmapToWidth(bitmap: Bitmap, targetWidth: Int): Bitmap {
-        if (bitmap.width == targetWidth) return bitmap
-        val h = (bitmap.height.toFloat() / bitmap.width * targetWidth).toInt()
-        return Bitmap.createScaledBitmap(bitmap, targetWidth, h, true)
-    }
-
-    private fun toMonoBitmap(src: Bitmap): Bitmap {
-        val bw = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
-        val pixels = IntArray(src.width * src.height).also { src.getPixels(it, 0, src.width, 0, 0, src.width, src.height) }
-        for (i in pixels.indices) {
-            val gray = ((pixels[i] ushr 16 and 0xFF) +
-                    (pixels[i] ushr 8  and 0xFF) +
-                    (pixels[i]        and 0xFF)) / 3
-            pixels[i] = if (gray > 127) Color.WHITE else Color.BLACK
-        }
-        bw.setPixels(pixels, 0, src.width, 0, 0, src.width, src.height)
-        return bw
-    }
-
-    private fun adjustBitmapHeight(bitmap: Bitmap): Bitmap {
-        val maxHeight = bitmap.height / 2
-        return Bitmap.createScaledBitmap(bitmap, bitmap.width, maxHeight, true)
-    }
-
-    private suspend fun convertA4PdfToBitmap(
+    private suspend fun convertPdfPageToBitmap(
         context: Context,
-        pdfUri: Uri,
-        page: Int
+        pdfFile: File,
+        pageNumber: Int,
+        addLeftMarginPx: Int = 0,
+        addTopMarginPx: Int = 0
     ): Bitmap? = withContext(Dispatchers.IO) {
         var fd: ParcelFileDescriptor? = null
         var renderer: PdfRenderer? = null
         try {
-            fd = context.contentResolver.openFileDescriptor(pdfUri, "r") ?: return@withContext null
+            fd = ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY)
             renderer = PdfRenderer(fd)
-            if (page !in 0 until renderer.pageCount) return@withContext null
-            renderer.openPage(page).use { p ->
-                val w = ((210f / 25.4f) * PRINTER_DPI).toInt()
-                val h = ((297f / 25.4f) * PRINTER_DPI).toInt()
-                return@withContext Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also {
-                    it.eraseColor(Color.WHITE)
-                    p.render(it, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            if (pageNumber !in 0 until renderer.pageCount) return@withContext null
+            renderer.openPage(pageNumber).use { page ->
+                val scale = PRINTER_DPI / 72f
+                val bmp = Bitmap.createBitmap(
+                    (page.width * scale).toInt(),
+                    (page.height * scale).toInt(),
+                    Bitmap.Config.ARGB_8888
+                )
+                bmp.eraseColor(Color.WHITE)
+                page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                val w = bmp.width + addLeftMarginPx
+                val h = bmp.height + addTopMarginPx
+                val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                val c = android.graphics.Canvas(out)
+                c.drawColor(Color.WHITE)
+                c.drawBitmap(bmp, addLeftMarginPx.toFloat(), addTopMarginPx.toFloat(), null)
+                val pixels = IntArray(w * h).also { out.getPixels(it, 0, w, 0, 0, w, h) }
+                for (i in pixels.indices) {
+                    val gray = ((pixels[i] ushr 16 and 0xFF) +
+                            (pixels[i] ushr 8 and 0xFF) +
+                            (pixels[i] and 0xFF)) / 3
+                    pixels[i] = if (gray > 127) Color.WHITE else Color.BLACK
                 }
-            }        } catch (e: Exception) {
-            Log.e(TAG, "convertA4PdfToBitmap error", e)
+                out.setPixels(pixels, 0, w, 0, 0, w, h)
+                out
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "convertPdf error", e)
             null
         } finally {
             renderer?.close()
             fd?.close()
         }
     }
+
+    private suspend fun printBitmapOverBluetooth(bitmap: Bitmap): Boolean =
+        withContext(Dispatchers.IO) {
+            val prefs = applicationContext
+                .getSharedPreferences("printer_prefs", Context.MODE_PRIVATE)
+            val addr = prefs.getString("printer_address", "") ?: ""
+            if (addr.isBlank()) return@withContext false
+            if (PrinterHelper.portOpenBT(applicationContext, addr) != 0) {
+                PrinterHelper.portClose()
+                return@withContext false
+            }
+
+            try {
+                PrinterHelper.papertype_CPCL(0)
+                PrinterHelper.printAreaSize(
+                    "0",
+                    PRINTER_DPI.toString(),
+                    PRINTER_DPI.toString(),
+                    bitmap.height.toString(),
+                    "1"
+                )
+
+                val res = PrinterHelper.printBitmap(0, 0, 0, bitmap, 0, false, 1)
+
+                PrinterHelper.openEndStatic(true)
+                val status = PrinterHelper.getEndStatus(16)
+                PrinterHelper.openEndStatic(false)
+
+                return@withContext (status == 0)
+            } finally {
+                delay(500)
+                PrinterHelper.portClose()
+            }
+        }
 }

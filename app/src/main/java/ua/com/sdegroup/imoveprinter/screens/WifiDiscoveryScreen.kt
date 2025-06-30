@@ -1,6 +1,5 @@
 package ua.com.sdegroup.imoveprinter.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,32 +17,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
-import java.net.Socket
-import java.net.InetSocketAddress
-import java.io.OutputStream
 import androidx.navigation.NavController
-import cpcl.PrinterHelper
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import ua.com.sdegroup.imoveprinter.model.PrinterModel
 import ua.com.sdegroup.imoveprinter.R
 import androidx.compose.ui.res.stringResource
-
-fun sendCpclCommand(ip: String, port: Int, cpcl: String): Boolean {
-    return try {
-        val socket = Socket()
-        socket.connect(InetSocketAddress(ip, port), 3000)
-        val out: OutputStream = socket.getOutputStream()
-        out.write(cpcl.toByteArray(Charsets.UTF_8))
-        out.flush()
-        out.close()
-        socket.close()
-        true
-    } catch (e: Exception) {
-        e.printStackTrace()
-        false
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,13 +83,14 @@ fun WifiDiscoveryScreen(
 
             val successMessage = stringResource(id = R.string.connection_successful)
             val failureMessage = stringResource(id = R.string.connection_failed)
-            
+
             Button(
                 onClick = {
                     scope.launch {
                         val connected = withContext(Dispatchers.IO) {
                             printerModel.connectToPrinter(context, "WiFi", ipInput)
                         }
+                        connectionStatus = if (connected) successMessage else failureMessage
                     }
                 },
                 modifier = Modifier

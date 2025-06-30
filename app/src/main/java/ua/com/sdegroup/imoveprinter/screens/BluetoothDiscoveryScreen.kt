@@ -79,6 +79,14 @@ fun BluetoothDiscoveryScreen(
   val isRefreshing by viewModel.isRefreshing.collectAsState()
   val bluetoothState by viewModel.bluetoothState.collectAsState()
 
+  val bluetoothEnabled = stringResource(id = R.string.bluetooth_enabled)
+  val bluetoothDisabled = stringResource(R.string.bluetooth_disabled)
+  val bluetoothPermissionDenied = stringResource(R.string.bluetooth_permission_denied)
+  val bluetoothPermissionRequired = stringResource(R.string.bluetooth_permission_required)
+  val locationEnabled = stringResource(R.string.location_enabled)
+  val locationDisabled = stringResource(R.string.location_disabled)
+  val deviceBonded = stringResource(R.string.device_bonded)
+
   // State for dialogs/toasts
   var showProgressDialog by remember { mutableStateOf(false) }
   var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -91,11 +99,11 @@ fun BluetoothDiscoveryScreen(
     contract = ActivityResultContracts.StartActivityForResult()
   ) { result ->
     if (result.resultCode == Activity.RESULT_OK) {
-      Toast.makeText(context, "Bluetooth enabled!", Toast.LENGTH_SHORT).show()
+      Toast.makeText(context, bluetoothEnabled, Toast.LENGTH_SHORT).show()
       viewModel.startDiscovery(context)
     } else {
-      Toast.makeText(context, "Bluetooth not enabled.", Toast.LENGTH_SHORT).show()
-      errorMessage = "Bluetooth not enabled. Please enable it to continue."
+      Toast.makeText(context, bluetoothDisabled, Toast.LENGTH_SHORT).show()
+      errorMessage = bluetoothPermissionDenied
     }
   }
 
@@ -115,8 +123,8 @@ fun BluetoothDiscoveryScreen(
       viewModel.initializeBluetooth(context)
       viewModel.startDiscovery(context)
     } else {
-      errorMessage = "Bluetooth permissions are required for discovery."
-      Toast.makeText(context, "Bluetooth permissions denied.", Toast.LENGTH_LONG).show()
+      errorMessage = bluetoothPermissionRequired
+      Toast.makeText(context, bluetoothPermissionDenied, Toast.LENGTH_LONG).show()
     }
   }
 
@@ -125,11 +133,11 @@ fun BluetoothDiscoveryScreen(
     contract = ActivityResultContracts.StartActivityForResult()
   ) { result ->
     if (isLocationEnabled(context)) {
-      Toast.makeText(context, "Location enabled!", Toast.LENGTH_SHORT).show()
+      Toast.makeText(context, locationEnabled, Toast.LENGTH_SHORT).show()
       viewModel.startDiscovery(context)
     } else {
-      Toast.makeText(context, "Location not enabled. Please enable it to continue.", Toast.LENGTH_SHORT).show()
-      errorMessage = "Location not enabled. Please enable it to continue."
+      Toast.makeText(context, locationDisabled, Toast.LENGTH_SHORT).show()
+      errorMessage = locationDisabled
     }
   }
 
@@ -170,7 +178,7 @@ fun BluetoothDiscoveryScreen(
 
       is BluetoothState.Bonded -> {
         showProgressDialog = false
-        Toast.makeText(context, "Device bonded: ${state.deviceAddress}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, deviceBonded + ": ${state.deviceAddress}", Toast.LENGTH_SHORT).show()
 
         sharedPreferences.edit().putString("printer_address", state.deviceAddress).apply()
 
@@ -236,7 +244,7 @@ fun BluetoothDiscoveryScreen(
       ) {
         if (bluetoothDevices.isEmpty() && !isRefreshing && bluetoothState !is BluetoothState.Error) {
           Text(
-            text = "Пристроїв Bluetooth не знайдено. Потягніть униз, щоб оновити.",
+            text = stringResource(id = R.string.no_bluetooth_devices),
             modifier = Modifier.align(Alignment.Center)
           )
         }
@@ -295,14 +303,14 @@ fun BluetoothDiscoveryScreen(
         if (showProgressDialog) {
           AlertDialog(
             onDismissRequest = { /* Cannot dismiss during pairing */ },
-            title = { Text(text = "Створення пари") },
+            title = { Text(text = stringResource(id = R.string.pairing_title)) },
             text = {
               Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
               ) {
                 CircularProgressIndicator(modifier = Modifier.padding(16.dp))
-                Text("Сполучення з пристроєм...")
+                Text(stringResource(id = R.string.pairing_message))
               }
             },
             confirmButton = {}
@@ -311,7 +319,7 @@ fun BluetoothDiscoveryScreen(
       }
       errorMessage?.let { message ->
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-        errorMessage = null // Clear the error message after showing
+        errorMessage = null
       }
     }
   }
@@ -334,7 +342,7 @@ fun BluetoothDeviceItem(
   ) {
     Column {
       Text(
-        text = device.name ?: "Невідомий пристрій",
+        text = device.name ?: stringResource(id = R.string.unknown_device),
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
       )

@@ -41,11 +41,10 @@
     val bluetoothState: StateFlow<BluetoothState> = _bluetoothState.asStateFlow()
 
     private var bluetoothAdapter: BluetoothAdapter? = null
-    private var _context: Context? = null // Hold application context to avoid leaks
+    private var _context: Context? = null
 
-    // Receiver for Bluetooth discovery and bonding events
     private val bluetoothReceiver = object : BroadcastReceiver() {
-      @SuppressLint("MissingPermission") // Permissions handled at UI level
+      @SuppressLint("MissingPermission")
       override fun onReceive(context: Context?, intent: Intent?) {
         when (intent?.action) {
           BluetoothDevice.ACTION_FOUND -> {
@@ -87,11 +86,10 @@
       }
     }
 
-    // Initialize BluetoothAdapter using the new recommended way
-    @SuppressLint("MissingPermission") // Permissions handled at UI layer
+    @SuppressLint("MissingPermission")
     fun initializeBluetooth(context: Context) {
       if (_context == null) {
-        _context = context.applicationContext // Use application context to avoid leaks
+        _context = context.applicationContext
         val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = bluetoothManager.adapter
 
@@ -101,7 +99,6 @@
           return
         }
 
-        // Register BroadcastReceiver
         val filter = IntentFilter().apply {
           addAction(BluetoothDevice.ACTION_FOUND)
           addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
@@ -118,6 +115,11 @@
           initializeBluetooth(context)
       }
 
+      if (_isRefreshing.value) {
+        Log.d(TAG, "Already discovering, skipping new discovery")
+        return
+      }
+
       if (!hasBluetoothPermissions()) {
         _bluetoothState.value = BluetoothState.Error("Bluetooth permissions not granted1.")
         return
@@ -129,17 +131,13 @@
       }
 
       if (!bluetoothAdapter!!.isEnabled) {
-        // Request enable Bluetooth will be handled by ActivityResultLauncher in UI
         _bluetoothState.value = BluetoothState.Error("Bluetooth is not enabled.")
         return
       }
 
-      // Clear existing devices before new discovery
-      _bluetoothDevices.value = emptyList()
       _isRefreshing.value = true
       _bluetoothState.value = BluetoothState.Discovering
 
-      // Cancel any existing discovery before starting a new one
       if (bluetoothAdapter!!.isDiscovering) {
         bluetoothAdapter!!.cancelDiscovery()
       }
@@ -147,7 +145,7 @@
       Log.d(TAG, "Starting Bluetooth discovery")
     }
 
-    @SuppressLint("MissingPermission") // Permissions handled at UI layer
+    @SuppressLint("MissingPermission")
     fun pairDevice(device: BluetoothDevice) {
       if (!hasBluetoothPermissions()) {
         _bluetoothState.value = BluetoothState.Error("Bluetooth permissions not granted2.")
@@ -163,7 +161,6 @@
           _bluetoothState.value = BluetoothState.Bonded(device.address)
         } else {
           _bluetoothState.value = BluetoothState.Pairing
-          // Cancel discovery before bonding to avoid issues
           if (bluetoothAdapter!!.isDiscovering) {
             bluetoothAdapter!!.cancelDiscovery()
           }
@@ -176,12 +173,10 @@
       }
     }
 
-    // Helper to check if a device is already in the list
     private fun isDeviceAlreadyAdded(address: String): Boolean {
       return _bluetoothDevices.value.any { it.address == address }
     }
 
-    // Check for necessary Bluetooth permissions
     private fun hasBluetoothPermissions(): Boolean {
       if (_context == null) {
           Log.e(TAG, "Context is null. Cannot check permissions.")
@@ -212,7 +207,7 @@
       if (bluetoothAdapter?.isDiscovering == true) {
         bluetoothAdapter?.cancelDiscovery()
       }
-      _context = null // Clear context reference
+      _context = null
       Log.d(TAG, "BluetoothViewModel cleared and receiver unregistered")
     }
   }

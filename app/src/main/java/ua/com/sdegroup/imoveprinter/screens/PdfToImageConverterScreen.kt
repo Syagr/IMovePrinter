@@ -42,16 +42,15 @@ import androidx.compose.ui.res.stringResource
 suspend fun convertPdfPageToBitmap(
   context: Context,
   pdfUri: Uri,
-  pageNumber: Int, // 0-indexed page number
-  width: Int = 1024, // Desired width of the output bitmap
-  height: Int = (width * 1.414).toInt() // Approximate A4 aspect ratio
+  pageNumber: Int,
+  width: Int = 1024,
+  height: Int = (width * 1.414).toInt()
 ): Bitmap? = withContext(Dispatchers.IO) {
   var fileDescriptor: ParcelFileDescriptor? = null
   var pdfRenderer: PdfRenderer? = null
   var currentPage: PdfRenderer.Page? = null
 
   try {
-    // Open the PDF file
     fileDescriptor = context.contentResolver.openFileDescriptor(pdfUri, "r")
     if (fileDescriptor == null) {
       return@withContext null
@@ -59,24 +58,18 @@ suspend fun convertPdfPageToBitmap(
 
     pdfRenderer = PdfRenderer(fileDescriptor)
 
-    // Ensure the page number is valid
     if (pageNumber < 0 || pageNumber >= pdfRenderer.pageCount) {
       return@withContext null
     }
 
-    // Open the desired page
     currentPage = pdfRenderer.openPage(pageNumber)
 
-    // Create a bitmap to render the page onto
     val bitmap = Bitmap.createBitmap(
       width,
       height,
       Bitmap.Config.ARGB_8888
     )
 
-    // Render the page onto the bitmap
-    // The last argument is the render mode (e.g., RENDER_MODE_FOR_DISPLAY)
-    // You can also specify a Rect to render only a part of the page, or a Matrix for transformations
     currentPage.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
 
     return@withContext bitmap
@@ -90,7 +83,6 @@ suspend fun convertPdfPageToBitmap(
   }
 }
 
-// Example of how to save the bitmap to a file (optional)
 fun saveBitmapToFile(bitmap: Bitmap, file: File, format: Bitmap.CompressFormat = Bitmap.CompressFormat.PNG, quality: Int = 90): Boolean {
   return try {
     FileOutputStream(file).use { out ->
@@ -110,12 +102,11 @@ fun PdfToImageConverterScreen() {
     var pageBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember { mutableStateOf(false) }
 
-    // Activity Result Launcher for picking a PDF file
     val pickPdfLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         selectedPdfUri = uri
-        pageBitmap = null // Clear previous image
+        pageBitmap = null
     }
 
     Column(
@@ -137,7 +128,6 @@ fun PdfToImageConverterScreen() {
                 onClick = {
                     if (!isLoading) {
                         isLoading = true
-                        // Launch a coroutine to do the PDF rendering in a background thread
                         CoroutineScope(Dispatchers.Main).launch {
                             pageBitmap = convertPdfPageToBitmap(context, uri, 0) // Convert first page
                             isLoading = false

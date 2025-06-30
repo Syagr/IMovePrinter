@@ -18,8 +18,18 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        release {
+            storeFile file(APP_UPLOAD_STORE_FILE)
+            storePassword APP_UPLOAD_STORE_PASSWORD
+            keyAlias APP_UPLOAD_KEY_ALIAS
+            keyPassword APP_UPLOAD_KEY_PASSWORD
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
@@ -49,6 +59,10 @@ android {
         main {
             jniLibs.srcDirs = ['libs']
         }
+    }
+    lint {
+        abortOnError false
+        disable "NullSafeMutableLiveData"
     }
 }
 

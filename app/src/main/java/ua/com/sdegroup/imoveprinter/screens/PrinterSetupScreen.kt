@@ -238,7 +238,7 @@ fun PrinterSetup(
               stringResource(id = R.string.ukrainian),
               stringResource(id = R.string.english)
             )
-            val languageCodes = listOf("en", "uk")
+            val languageCodes = listOf("uk", "en")
             languages.forEachIndexed { index, language ->
               DropdownMenuItem(
                 text = { Text(language) },

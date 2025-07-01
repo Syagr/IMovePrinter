@@ -23,6 +23,7 @@
     <string name="connection_successful">Підключення успішне</string>
     <string name="connection_failed">Підключення не вдалося</string>
     <string name="enter_printer_ip">Введіть IP принтера</string>
+    <string name="printer_ip">IP принтера</string>
     <string name="back">Назад</string>
     <string name="wifi_discovery">Пошук WiFi</string>
         <string name="connect">Підключити</string>
@@ -65,4 +66,7 @@
     <string name="enter_password">Введіть пароль</string>
     <string name="scan_networks">Сканувати мережі</string>
     <string name="wifi_multinet_not_supported">Wifi мультимережа не підтримується</string>
+    <string name="pdf_preview">Попередній перегляд PDF</string>
+    <string name="error_open_pdf_preview">Не вдалося відкрити PDF</string>
+    <string name="successfully">успішно</string>
 </resources>

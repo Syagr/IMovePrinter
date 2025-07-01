@@ -23,6 +23,7 @@
     <string name="connection_successful">Connection Successful</string>
     <string name="connection_failed">Connection Failed</string>
     <string name="enter_printer_ip">Enter Printer IP</string>
+    <string name="printer_ip">Printer IP</string>
     <string name="back">Back</string>
             <string name="printer_setup">Printer Setup</string>
     <string name="no_paired_devices">No paired devices found</string>
@@ -62,4 +63,7 @@
     <string name="enter_password">Enter password</string>
     <string name="scan_networks">Scan networks</string>
     <string name="wifi_multinet_not_supported">Wifi multinet not supported</string>
+    <string name="pdf_preview">PDF Preview</string>
+    <string name="error_open_pdf_preview">Could not open PDF</string>
+    <string name="successfully">successfully</string>
 </resources>

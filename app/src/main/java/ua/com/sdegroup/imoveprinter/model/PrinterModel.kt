@@ -26,7 +26,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import ua.com.sdegroup.imoveprinter.util.PrinterNetworkHolder
 
-
 class PrinterModel(
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -156,6 +155,8 @@ class PrinterModel(
                     Log.e(TAG, "Exception during Bluetooth connection", e)
                 }
             }
+        } else {
+            Log.e(TAG, "Bluetooth address is null or blank")
         }
     }
 
@@ -167,22 +168,21 @@ class PrinterModel(
                 Log.d(TAG, "Previous connection closed")
             }
 
+            if (addressOrIp.isBlank()) {
+                Log.e(TAG, "$type address is missing or invalid")
+                return false
+            }
+
             val result = when (type) {
                 "Bluetooth" -> PrinterHelper.portOpenBT(context, addressOrIp)
                 "WiFi" -> PrinterHelper.portOpenWIFI(context, addressOrIp)
-                "USB" -> {
-                    val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
-                    val usbDevice = usbManager.deviceList.values.firstOrNull {
-                        it.deviceName == addressOrIp
-                    } ?: return false.also { Log.e(TAG, "USB device not found: $addressOrIp") }
-
-                    PrinterHelper.portOpenUSB(context, usbDevice)
-                }
-
                 else -> -99
             }
 
             Log.d(TAG, "Connection result ($type): $result")
+            if (result != 0) {
+                Log.e(TAG, "Failed to connect to $type printer. Error code: $result")
+            }
             return result == 0
         } catch (e: Exception) {
             Log.e(TAG, "Exception during $type connection", e)
@@ -290,17 +290,19 @@ class PrinterModel(
         pdfUri: Uri?,
         pageNumber: Int = 0
     ): Boolean = withContext(Dispatchers.IO) {
-        val pageBitmap = convertPdfPageToBitmap(context, pdfUri, pageNumber)
-        if (pageBitmap != null) {
-            try {
-                val result = PrinterHelper.printBitmap(0, 0, 0, pageBitmap, 0, false, 1)
-                PrinterHelper.Form()
-                PrinterHelper.Print()
-                Log.d(TAG, "PDF bitmap sent: result=$result")
-                return@withContext result == 0
-            } catch (e: Exception) {
-                Log.e(TAG, "printPdfOnBluetooth error", e)
-            } finally {
+val pageBitmap = convertPdfPageToBitmap(context, pdfUri, pageNumber)
+if (pageBitmap != null) {
+    Log.d(TAG, "Bitmap width: ${pageBitmap.width}, height: ${pageBitmap.height}, config: ${pageBitmap.config}")
+    try {
+        val result = PrinterHelper.printBitmap(0, 0, 0, pageBitmap, 0, false, 1)
+        PrinterHelper.Form()
+        PrinterHelper.Print()
+        Log.d(TAG, "PDF bitmap sent: result=$result")
+        return@withContext result == 0
+    } catch (e: Exception) {
+        Log.e(TAG, "Error during PDF printing: ${e.message}", e)
+        return@withContext false
+    } finally {
                 if (PrinterHelper.IsOpened()) {
                     Log.d(TAG, "Closing port after PDF print")
                     PrinterHelper.portClose()
@@ -309,6 +311,38 @@ class PrinterModel(
         }
         false
     }
+
+suspend fun sendPdfToPrinter(context: Context, type: String, pdfBitmap: Bitmap): Boolean {
+    return withContext(Dispatchers.IO) {
+        try {
+            if (!PrinterHelper.IsOpened()) {
+                Log.e(TAG, "$type printer is not connected")
+                return@withContext false
+            }
+
+            // Check printer status
+            val status = getPrinterStatus(type)
+            if (status != "Готовий" && status != "Wi-Fi підключено") {
+                Log.e(TAG, "Printer is not ready: $status")
+                return@withContext false
+            }
+
+            // Ensure bitmap is formatted correctly
+            val formattedBitmap = pdfBitmap.copy(Bitmap.Config.ARGB_8888, true)
+
+            // Call printBitmap with correct parameters
+            val result = PrinterHelper.printBitmap(0, 0, 0, formattedBitmap, 0, false, 1)
+            Log.d(TAG, "$type PDF bitmap sent: result=$result")
+            if (result != 0) {
+                Log.e(TAG, "Failed to send PDF bitmap to $type printer. Error code: $result")
+            }
+            return@withContext result == 0
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception during $type PDF printing", e)
+            return@withContext false
+        }
+    }
+}
 
     override fun onCleared() {
         super.onCleared()

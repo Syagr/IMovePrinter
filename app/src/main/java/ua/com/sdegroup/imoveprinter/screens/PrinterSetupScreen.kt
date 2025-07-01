@@ -40,10 +40,6 @@ import ua.com.sdegroup.imoveprinter.model.PrinterModel
 import ua.com.sdegroup.imoveprinter.ui.theme.IMovePrinterTheme
 import ua.com.sdegroup.imoveprinter.R
 import androidx.compose.ui.res.stringResource
-import android.app.PendingIntent
-import android.content.Intent
-import android.hardware.usb.UsbDevice
-import android.hardware.usb.UsbManager
 
 @SuppressLint("ServiceCast")
 fun getBluetoothAdapter(context: Context): BluetoothAdapter? {
@@ -173,17 +169,6 @@ fun PrinterSetup(
   var statusText by remember { mutableStateOf("") }
   val selectedAddressFlow = backStackEntry.savedStateHandle.getStateFlow<String?>("address", null)
   val selectedAddress by selectedAddressFlow.collectAsState()
-  val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
-  val usbDevices = remember { usbManager.deviceList.values.toList() }
-  var selectedUsbDevice by rememberSaveable { mutableStateOf<UsbDevice?>(null) }
-  val usbPermissionIntent = remember {
-    PendingIntent.getBroadcast(
-      context,
-      0,
-      Intent("com.imoveprinter.USB_PERMISSION"),
-      PendingIntent.FLAG_IMMUTABLE
-    )
-  }
   LaunchedEffect(selectedAddress) {
     selectedAddress?.let {
       viewModel.setAddress(it)
@@ -202,7 +187,7 @@ fun PrinterSetup(
   var selectedIndex by rememberSaveable { mutableStateOf(0) }
   var printerStatus by remember { mutableStateOf("") }
   var menuExpanded by remember { mutableStateOf(false) }
-  val connTypes = listOf("Bluetooth", "WiFi", "USB")
+  val connTypes = listOf("Bluetooth", "WiFi")
   var selType by rememberSaveable { mutableStateOf(0) }
   val wifiMgr = context.applicationContext
     .getSystemService(Context.WIFI_SERVICE) as WifiManager
@@ -295,27 +280,6 @@ fun PrinterSetup(
             "WiFi" -> {
               navController.navigate("wifi_discovery")
             }
-
-            "USB" -> {
-              val device = usbDevices.firstOrNull()
-              if (device != null) {
-                selectedUsbDevice = device
-                if (usbManager.hasPermission(device)) {
-                  val success = viewModel.connectToPrinter(
-                    context,
-                    "USB",
-                    device.deviceName
-                  )
-                  statusText =
-                    if (success) usbConnectedLabel else usbConnectionFailedLabel
-                } else {
-                  usbManager.requestPermission(device, usbPermissionIntent)
-                  statusText = usbPermissionRequestedlabel
-                }
-              } else {
-                statusText = usbPrinterNotFoundLabel
-              }
-            }
           }
         },
         onStatus = {
@@ -385,14 +349,6 @@ fun PrinterSetup(
             }
             statusText = pdfSentLabel
           }
-        },
-        onVersion = {
-          scope.launch {
-            withContext(Dispatchers.IO) {
-              viewModel.getVersion()
-            }
-            statusText = versionCompletedLabel
-          }
         }
       )
 
@@ -409,9 +365,6 @@ fun PrinterSetup(
           ?: stringResource(id = R.string.no_paired_devices)
 
         "WiFi" -> resolvePrinterIp() ?: stringResource(R.string.ip_not_defined)
-
-        "USB" -> selectedUsbDevice?.deviceName
-          ?: stringResource(R.string.usb_printer_not_selected)
 
         else -> stringResource(R.string.connection_type_not_supported)
       }

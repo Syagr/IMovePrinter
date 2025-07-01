@@ -121,8 +121,8 @@ fun BluetoothDiscoveryScreen(
 
     if (granted) {
       // Permissions granted, proceed with initialization
-      viewModel.initializeBluetooth(context)
-      viewModel.startDiscovery(context)
+      viewModel.onPermissionsGranted(context)
+      viewModel.startDiscovery(context) // Ensure discovery starts immediately
     } else {
       errorMessage = bluetoothPermissionRequired
       Toast.makeText(context, bluetoothPermissionDenied, Toast.LENGTH_LONG).show()
@@ -217,6 +217,13 @@ fun BluetoothDiscoveryScreen(
       enableBtLauncher.launch(enableBtIntent)
     } else if (bluetoothAdapterInitialized(context) && isBluetoothEnabled(context) && !isRefreshing && bluetoothDevices.isEmpty()) {
       // Auto-start discovery if adapter is ready and no devices found yet
+      viewModel.startDiscovery(context)
+    }
+  }
+
+  // Ensure discovery starts if in Idle state and no devices are found
+  LaunchedEffect(bluetoothState, bluetoothDevices) {
+    if (bluetoothState is BluetoothState.Idle && bluetoothDevices.isEmpty()) {
       viewModel.startDiscovery(context)
     }
   }

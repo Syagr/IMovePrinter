@@ -60,4 +60,9 @@
     <string name="location_enabled">Локація увімкнена!</string>
     <string name="location_disabled">Локація не увімкнена. Увімкніть її, щоб продовжити.</string>
     <string name="device_bonded">Пристрій з\'єднаний</string>
+
+    <string name="selected_network">Обрана мережа</string>
+    <string name="enter_password">Введіть пароль</string>
+    <string name="scan_networks">Сканувати мережі</string>
+    <string name="wifi_multinet_not_supported">Wifi мультимережа не підтримується</string>
 </resources>

@@ -27,7 +27,6 @@ import ua.com.sdegroup.imoveprinter.screens.BluetoothDiscoveryScreen
 import ua.com.sdegroup.imoveprinter.screens.WifiDiscoveryScreen
 import ua.com.sdegroup.imoveprinter.ui.theme.IMovePrinterTheme
 
-
 class MainActivity : ComponentActivity() {
 
   private lateinit var currentLanguage: MutableState<String>

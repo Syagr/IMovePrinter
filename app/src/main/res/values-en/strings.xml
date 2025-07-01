@@ -58,4 +58,8 @@
     <string name="location_enabled">Location enabled!</string>
     <string name="location_disabled">Location not enabled. Please enable it to continue.</string>
     <string name="device_bonded">Device bonded</string>
+    <string name="selected_network">Selected network</string>
+    <string name="enter_password">Enter password</string>
+    <string name="scan_networks">Scan networks</string>
+    <string name="wifi_multinet_not_supported">Wifi multinet not supported</string>
 </resources>

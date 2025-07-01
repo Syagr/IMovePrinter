@@ -71,8 +71,8 @@ fun PrinterNameField(
     value = printerName,
     onValueChange = onNameChange,
     modifier = Modifier
-        .fillMaxWidth()
-        .padding(vertical = 8.dp),
+      .fillMaxWidth()
+      .padding(vertical = 8.dp),
     singleLine = true,
 
     label = {
@@ -256,15 +256,15 @@ fun PrinterSetup(
   ) { padding ->
     Column(
       modifier = Modifier
-          .fillMaxSize()
-          .padding(padding)
-          .clickable(
-              indication = null,
-              interactionSource = remember { MutableInteractionSource() }
-          ) {
-              focusManager.clearFocus()
-          }
-          .padding(16.dp)
+        .fillMaxSize()
+        .padding(padding)
+        .clickable(
+          indication = null,
+          interactionSource = remember { MutableInteractionSource() }
+        ) {
+          focusManager.clearFocus()
+        }
+        .padding(16.dp)
     ) {
       Row(
         Modifier.fillMaxWidth(),
@@ -284,8 +284,8 @@ fun PrinterSetup(
 
       PrinterActionsGrid(
         modifier = Modifier
-            .weight(1f)
-            .fillMaxWidth(),
+          .weight(1f)
+          .fillMaxWidth(),
         onConnect = {
           when (connTypes[selType]) {
             "Bluetooth" -> {
@@ -325,17 +325,14 @@ fun PrinterSetup(
                 when (connTypes[selType]) {
                   "Bluetooth" -> {
                     val device = pairedDevices.getOrNull(selectedIndex)
-                    device?.address?.let {
-                      viewModel.setAddress(it)
-                      viewModel.connect(context, 0)
-                      cpcl.PrinterHelper.IsOpened()
+                    device?.address?.let { mac ->
+                      viewModel.connectToPrinter(context, "Bluetooth", mac)
                     } ?: false
                   }
 
                   "WiFi" -> {
-                    val ip = resolvePrinterIp()
-                    ip?.let {
-                      viewModel.connectToPrinter(context, "WiFi", it)
+                    resolvePrinterIp()?.let { ip ->
+                      viewModel.connectToPrinter(context, "WiFi", ip)
                     } ?: false
                   }
 
@@ -344,12 +341,12 @@ fun PrinterSetup(
               } else true
             }
 
+            // Обновляем статус
             printerStatus = if (printerReady) {
               withContext(Dispatchers.IO) { viewModel.getStatus(connTypes[selType]) }
-            } else ({
-              printerStatus = connectionFailedLabel
-            }).toString()
-
+            } else {
+              connectionFailedLabel
+            }
             statusText = "$printerStatusLabel $printerStatus"
           }
         },

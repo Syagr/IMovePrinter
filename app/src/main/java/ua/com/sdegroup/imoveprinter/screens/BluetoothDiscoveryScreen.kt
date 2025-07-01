@@ -68,9 +68,9 @@ import ua.com.sdegroup.imoveprinter.R
 @SuppressLint("MissingPermission")
 @Composable
 fun BluetoothDiscoveryScreen(
-    navController: NavController,
-    currentLanguage: String,
-    onLanguageChange: (String) -> Unit
+  navController: NavController,
+  currentLanguage: String,
+  onLanguageChange: (String) -> Unit
 ) {
   val context = LocalContext.current
   val viewModel: BluetoothViewModel = viewModel()
@@ -92,7 +92,8 @@ fun BluetoothDiscoveryScreen(
   var errorMessage by remember { mutableStateOf<String?>(null) }
 
   // SharedPreferences initialization
-  val sharedPreferences = LocalContext.current.getSharedPreferences("printer_prefs", Context.MODE_PRIVATE)
+  val sharedPreferences =
+    LocalContext.current.getSharedPreferences("printer_prefs", Context.MODE_PRIVATE)
 
   // ActivityResultLauncher for Bluetooth enable request
   val enableBtLauncher = rememberLauncherForActivityResult(
@@ -168,8 +169,9 @@ fun BluetoothDiscoveryScreen(
   LaunchedEffect(bluetoothState) {
     when (val state = bluetoothState) {
       is BluetoothState.Error -> {
-        errorMessage = state.message
+        // При ошибке показываем сообщение и скрываем диалог
         showProgressDialog = false
+        Toast.makeText(context, state.message, Toast.LENGTH_LONG).show()
       }
 
       BluetoothState.Pairing -> {
@@ -178,21 +180,27 @@ fun BluetoothDiscoveryScreen(
 
       is BluetoothState.Bonded -> {
         showProgressDialog = false
-        Toast.makeText(context, deviceBonded + ": ${state.deviceAddress}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+          context,
+          "$deviceBonded: ${state.deviceAddress}",
+          Toast.LENGTH_SHORT
+        ).show()
 
-        sharedPreferences.edit().putString("printer_address", state.deviceAddress).apply()
+        sharedPreferences.edit()
+          .putString("printer_connection_type", "Bluetooth")
+          .putString("printer_address", state.deviceAddress)
+          .apply()
 
         printerModel.connectToPrinter(context, "Bluetooth", state.deviceAddress)
 
-        // Сохраняем адрес в navigation
-        navController.previousBackStackEntry?.savedStateHandle?.set("address", state.deviceAddress)
-
+        navController.previousBackStackEntry
+          ?.savedStateHandle
+          ?.set("address", state.deviceAddress)
         navController.popBackStack()
       }
 
-
       BluetoothState.Discovering -> {
-        showProgressDialog = false // Discovery itself doesn't need a dialog
+        showProgressDialog = false
       }
 
       BluetoothState.Idle -> {
@@ -216,15 +224,15 @@ fun BluetoothDiscoveryScreen(
   Scaffold(
     topBar = {
       TopAppBar(
-          title = { Text(stringResource(id = R.string.bluetooth_discovery).toString()) },
-          navigationIcon = {
-              IconButton(onClick = { navController.popBackStack() }) {
-                  Icon(
-                      imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                      contentDescription = stringResource(id = R.string.back).toString()
-                  )
-              }
+        title = { Text(stringResource(id = R.string.bluetooth_discovery).toString()) },
+        navigationIcon = {
+          IconButton(onClick = { navController.popBackStack() }) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+              contentDescription = stringResource(id = R.string.back).toString()
+            )
           }
+        }
       )
     }
   ) { paddingValues -> // Important: Apply paddingValues to your content!
@@ -284,11 +292,14 @@ fun BluetoothDiscoveryScreen(
                 onClick = {
                   if (device.bondState == BluetoothDevice.BOND_BONDED) {
                     Log.d("BluetoothDiscoveryScreen1", device.address)
-                    navController.previousBackStackEntry?.savedStateHandle?.set("address", device.address)
 
-                    // Save the selected address to SharedPreferences
-                    sharedPreferences.edit().putString("printer_address", device.address).apply()
-
+                    sharedPreferences.edit()
+                      .putString("printer_connection_type", "Bluetooth")
+                      .putString("printer_address", device.address)
+                      .apply()
+                    navController.previousBackStackEntry
+                      ?.savedStateHandle
+                      ?.set("address", device.address)
                     navController.popBackStack()
                   } else {
                     viewModel.pairDevice(device) // Initiate pairing
@@ -387,7 +398,7 @@ private fun bluetoothAdapterInitialized(context: Context): Boolean {
 private fun isLocationEnabled(context: Context): Boolean {
   val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
   return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
-         locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+          locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
 }
 
 

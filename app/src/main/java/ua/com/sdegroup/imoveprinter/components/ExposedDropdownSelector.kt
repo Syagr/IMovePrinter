@@ -85,9 +85,8 @@ fun LanguageSelector(onLanguageSelected: (String) -> Unit) {
                 DropdownMenuItem(
                     text = { Text(language) },
                     onClick = {
-                        selectedLanguage = language
-                        expanded = false
-                        onLanguageSelected(languageCodes[index])
+                        expanded = false // Закрываем модалку сразу
+                        onLanguageSelected(languageCodes[index]) // Выполняем действие после закрытия
                     }
                 )
             }

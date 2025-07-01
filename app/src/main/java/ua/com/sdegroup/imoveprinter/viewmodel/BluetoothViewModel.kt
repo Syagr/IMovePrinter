@@ -1,4 +1,4 @@
-  package ua.com.sdegroup.imoveprinter.viewmodel
+package ua.com.sdegroup.imoveprinter.viewmodel
 
   import android.Manifest
   import android.annotation.SuppressLint
@@ -111,38 +111,35 @@
 
     @SuppressLint("MissingPermission")
     fun startDiscovery(context: Context) {
-      if (_context == null) {
-          initializeBluetooth(context)
-      }
+        if (_context == null) {
+            initializeBluetooth(context)
+        }
 
-      if (_isRefreshing.value) {
-        Log.d(TAG, "Already discovering, skipping new discovery")
-        return
-      }
+        if (!hasBluetoothPermissions()) {
+            _bluetoothState.value = BluetoothState.Error("Bluetooth permissions not granted.")
+            return
+        }
 
-      if (!hasBluetoothPermissions()) {
-        _bluetoothState.value = BluetoothState.Error("Bluetooth permissions not granted1.")
-        return
-      }
+        if (bluetoothAdapter == null) {
+            _bluetoothState.value = BluetoothState.Error("Bluetooth adapter not initialized.")
+            return
+        }
 
-      if (bluetoothAdapter == null) {
-        _bluetoothState.value = BluetoothState.Error("Bluetooth adapter not initialized.")
-        return
-      }
+        if (!bluetoothAdapter!!.isEnabled) {
+            _bluetoothState.value = BluetoothState.Error("Bluetooth is not enabled.")
+            return
+        }
 
-      if (!bluetoothAdapter!!.isEnabled) {
-        _bluetoothState.value = BluetoothState.Error("Bluetooth is not enabled.")
-        return
-      }
+        if (bluetoothAdapter!!.isDiscovering) {
+            bluetoothAdapter!!.cancelDiscovery()
+            Log.d(TAG, "Canceled ongoing discovery to start a new one.")
+        }
 
-      _isRefreshing.value = true
-      _bluetoothState.value = BluetoothState.Discovering
+        _isRefreshing.value = true
+        _bluetoothState.value = BluetoothState.Discovering
 
-      if (bluetoothAdapter!!.isDiscovering) {
-        bluetoothAdapter!!.cancelDiscovery()
-      }
-      bluetoothAdapter!!.startDiscovery()
-      Log.d(TAG, "Starting Bluetooth discovery")
+        bluetoothAdapter!!.startDiscovery()
+        Log.d(TAG, "Starting Bluetooth discovery")
     }
 
     @SuppressLint("MissingPermission")
@@ -209,5 +206,15 @@
       }
       _context = null
       Log.d(TAG, "BluetoothViewModel cleared and receiver unregistered")
+    }
+
+    fun onPermissionsGranted(context: Context) {
+      initializeBluetooth(context)
+      startDiscovery(context)
+    }
+
+    @SuppressLint("MissingPermission")
+    fun restartDiscovery(context: Context) {
+        startDiscovery(context)
     }
   }

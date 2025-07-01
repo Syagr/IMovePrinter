@@ -74,8 +74,7 @@ fun PrinterActionsGrid(
     onStatus: () -> Unit,
     onDisconnect: () -> Unit,
     onPrintReceipt: () -> Unit,
-    onPrintPDF: () -> Unit,
-    onVersion: () -> Unit
+    onPrintPDF: () -> Unit
 ) {
     val actions = listOf(
         Triple(Icons.Filled.Link, stringResource(R.string.connect), onConnect),
@@ -83,7 +82,6 @@ fun PrinterActionsGrid(
         Triple(Icons.Filled.Close, stringResource(R.string.disconnect), onDisconnect),
         Triple(Icons.Filled.Print, stringResource(R.string.test_receipt), onPrintReceipt),
         Triple(Icons.Filled.PictureAsPdf, stringResource(R.string.test_pdf), onPrintPDF),
-        Triple(Icons.Filled.Settings, stringResource(R.string.version), onVersion),
     )
 
     LazyVerticalGrid(

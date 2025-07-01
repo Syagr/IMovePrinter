@@ -317,7 +317,7 @@ fun PrinterSetup(
         onDisconnect = {
           scope.launch {
             withContext(Dispatchers.IO) {
-              viewModel.disconnect()
+              viewModel.disconnect(context)
               val device = pairedDevices.getOrNull(selectedIndex)
               if (device != null) {
                 val success = unpairDevice(device)

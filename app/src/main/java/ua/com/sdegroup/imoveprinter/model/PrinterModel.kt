@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
+import android.hardware.usb.UsbManager
+import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.util.Log
@@ -22,6 +24,7 @@ import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import ua.com.sdegroup.imoveprinter.util.PrinterNetworkHolder
 
 class PrinterModel(
     private val savedStateHandle: SavedStateHandle
@@ -193,16 +196,25 @@ class PrinterModel(
         return getPrinterStatus(type)
     }
 
-    fun disconnect() {
+    fun disconnect(context: Context) {
+        Log.d(TAG, "Disconnecting printer...")
         try {
-            if (cpcl.PrinterHelper.IsOpened()) {
-                cpcl.PrinterHelper.portClose()
+            if (PrinterHelper.IsOpened()) {
+                PrinterHelper.portClose()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error closing port", e)
         }
-    }
 
+        PrinterNetworkHolder.networkCallback?.let { callback ->
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE)
+                    as ConnectivityManager
+            cm.bindProcessToNetwork(null)
+            cm.unregisterNetworkCallback(callback)
+        }
+        PrinterNetworkHolder.wifiNetwork = null
+        PrinterNetworkHolder.networkCallback = null
+    }
 
     fun getPrinterStatus(type: String): String {
         return try {

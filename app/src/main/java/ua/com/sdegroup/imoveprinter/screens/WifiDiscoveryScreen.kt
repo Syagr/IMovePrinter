@@ -8,7 +8,7 @@ import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
-import android.text.format.Formatter
+import androidx.compose.material.icons.filled.Refresh
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
@@ -94,6 +94,14 @@ fun WifiDiscoveryScreen(
         navigationIcon = {
           IconButton(onClick = { navController.popBackStack() }) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+          }
+        },
+        actions = {
+          IconButton(onClick = {
+            startScan(wifiManager)
+            scanResults = wifiManager.scanResults.filter { it.SSID.isNotBlank() }
+          }) {
+            Icon(Icons.Default.Refresh, contentDescription = "Refresh Wi-Fi")
           }
         }
       )

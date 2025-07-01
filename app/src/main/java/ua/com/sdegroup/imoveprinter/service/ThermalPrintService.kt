@@ -86,27 +86,45 @@ class ThermalPrintService : PrintService() {
       job.fail("No data"); return
     }
     val tempPdf = File(cacheDir, "print_$jobId.pdf")
+
     serviceScope.launch {
+      var fd: ParcelFileDescriptor? = null
+      var renderer: PdfRenderer? = null
       try {
-        // копируем pdf во временный файл
-        pfd.use { fd ->
-          FileInputStream(fd.fileDescriptor).use { fis ->
+        pfd.use { fdRaw ->
+          FileInputStream(fdRaw.fileDescriptor).use { fis ->
             FileOutputStream(tempPdf).use { fos ->
               fis.copyTo(fos)
             }
           }
         }
-        // конвертим первую страницу
-        val bitmap = convertPdfPageToBitmap(
-          applicationContext, tempPdf, 0,
-          addLeftMarginPx = 90, addTopMarginPx = 90
-        )
-        val ok = bitmap?.let { printBitmap(it) } ?: false
-        withContext(Dispatchers.Main) {
-          if (ok) job.complete() else job.fail("Print error")
+
+        fd = ParcelFileDescriptor.open(tempPdf, ParcelFileDescriptor.MODE_READ_ONLY)
+        renderer = PdfRenderer(fd)
+
+        for (pageIndex in 0 until renderer.pageCount) {
+          val bitmap = convertPdfPageToBitmap(
+            applicationContext,
+            tempPdf,
+            pageIndex,
+            addLeftMarginPx = 90,
+            addTopMarginPx = 90
+          ) ?: throw IllegalStateException("Failed to render page $pageIndex")
+
+          val ok = printBitmap(bitmap)
+          if (!ok) {
+            throw IllegalStateException("Print error on page $pageIndex")
+          }
+          delay(200)
         }
+
+        withContext(Dispatchers.Main) { job.complete() }
       } catch (e: Exception) {
+        Log.e(TAG, "Printing failed", e)
         withContext(Dispatchers.Main) { job.fail("Error: ${e.message}") }
+      } finally {
+        renderer?.close()
+        fd?.close()
       }
     }.also { activeJobs[jobId.toString()] = it }
   }
@@ -140,41 +158,38 @@ class ThermalPrintService : PrintService() {
       if (pageNumber !in 0 until renderer.pageCount) return@withContext null
 
       renderer.openPage(pageNumber).use { page ->
-        // 1) жёсткий DPI-преобразователь PDF-пунктов в точки принтера
-        val scale = PRINTER_DPI / 72f
-        val fullW = (page.width  * scale).roundToInt()
-        val fullH = (page.height * scale).roundToInt()
+        Log.d(TAG, "PDF page size: ${page.width}pt × ${page.height}pt")
 
-        // 2) рендерим страницу с этим масштабом
-        val bmpFull = Bitmap.createBitmap(fullW, fullH, Bitmap.Config.ARGB_8888)
-        bmpFull.eraseColor(Color.WHITE)
-        page.render(bmpFull,
-          Rect(0, 0, fullW, fullH),
+        val fullPrinterW = (PRINTER_WIDTH_MM / 25.4f * PRINTER_DPI).roundToInt()
+
+        val shrinkFactor = 0.85f
+
+        val printerW = (fullPrinterW * shrinkFactor).roundToInt()
+        val aspect = page.height.toFloat() / page.width.toFloat()
+        val printerH = (printerW * aspect).roundToInt()
+
+        val bmp = Bitmap.createBitmap(printerW, printerH, Bitmap.Config.ARGB_8888)
+        bmp.eraseColor(Color.WHITE)
+
+        page.render(
+          bmp,
+          Rect(0, 0, printerW, printerH),
           null,
-          PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+          PdfRenderer.Page.RENDER_MODE_FOR_PRINT
+        )
 
-        // 3) обрезаем по ширине принтера (центрируем горизонтально)
-        val printerW = (PRINTER_WIDTH_MM / 25.4f * PRINTER_DPI).roundToInt()
-        val cropX = ((fullW - printerW) / 2).coerceAtLeast(0)
-        val cropW = min(printerW, fullW - cropX)
-        val cropped = Bitmap.createBitmap(bmpFull, cropX, 0, cropW, fullH)
-
-        // 4) добавляем поля
-        val outW = cropped.width + addLeftMarginPx
-        val outH = cropped.height + addTopMarginPx
+        val outW = printerW + addLeftMarginPx
+        val outH = printerH + addTopMarginPx
         val out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
         canvas.drawColor(Color.WHITE)
-        canvas.drawBitmap(cropped, addLeftMarginPx.toFloat(), addTopMarginPx.toFloat(), null)
+        canvas.drawBitmap(bmp, addLeftMarginPx.toFloat(), addTopMarginPx.toFloat(), null)
 
-        // 5) бинаризация в ч/б, как у вас было
-        val pixels = IntArray(outW * outH).also {
-          out.getPixels(it, 0, outW, 0, 0, outW, outH)
-        }
+        val pixels = IntArray(outW * outH).also { out.getPixels(it, 0, outW, 0, 0, outW, outH) }
         for (i in pixels.indices) {
           val gray = ((pixels[i] ushr 16 and 0xFF) +
-                  (pixels[i] ushr  8 and 0xFF) +
-                  (pixels[i]       and 0xFF)) / 3
+                  (pixels[i] ushr 8 and 0xFF) +
+                  (pixels[i] and 0xFF)) / 3
           pixels[i] = if (gray > 127) Color.WHITE else Color.BLACK
         }
         out.setPixels(pixels, 0, outW, 0, 0, outW, outH)
@@ -201,48 +216,40 @@ class ThermalPrintService : PrintService() {
     val cm = applicationContext
       .getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
+    // Для Wi-Fi: биндим процесс к уже сохранённой сети
     if (type == "WiFi") {
-      PrinterNetworkHolder.wifiNetwork?.let { net ->
-        cm.bindProcessToNetwork(net)
+      PrinterNetworkHolder.wifiNetwork?.let { cm.bindProcessToNetwork(it) }
+    }
+
+    // --- Открываем порт только если он ещё закрыт ---
+    if (!PrinterHelper.IsOpened()) {
+      val openResult = when (type) {
+        "Bluetooth" -> PrinterHelper.portOpenBT(applicationContext, addr)
+        "WiFi" -> PrinterHelper.portOpenWIFI(applicationContext, addr)
+        else -> -1
+      }
+      if (openResult != 0) {
+        Log.e(TAG, "Unable to open port (type=$type): $openResult")
+        return@withContext false
       }
     }
 
-    // Открываем порт
-    val openResult = when (type) {
-      "Bluetooth" -> PrinterHelper.portOpenBT(applicationContext, addr)
-      "WiFi" -> PrinterHelper.portOpenWIFI(applicationContext, addr)
-      else -> -1
-    }
-    if (openResult != 0) {
-      PrinterHelper.portClose()
-      if (type == "WiFi") cm.bindProcessToNetwork(null)
-      return@withContext false
-    }
-
-    try {
+    // --- Печатаем на уже открытом порту ---
+    return@withContext try {
       PrinterHelper.papertype_CPCL(0)
       val widthDots = (PRINTER_WIDTH_MM / 25.4f * PRINTER_DPI).roundToInt()
       PrinterHelper.printAreaSize(
-        "0",                  // x
-        "0",                  // y
-        widthDots.toString(), // ширина в точках
-        bitmap.height.toString(),
-        "0"                   // ориентация
+        "0", "0", widthDots.toString(),
+        bitmap.height.toString(), "0"
       )
       PrinterHelper.printBitmap(0, 0, 0, bitmap, 0, false, 1)
       PrinterHelper.openEndStatic(true)
       val status = PrinterHelper.getEndStatus(16)
       PrinterHelper.openEndStatic(false)
-      return@withContext status == 0
-    } finally {
-      delay(500)
-      PrinterHelper.portClose()
-      if (type == "WiFi") {
-        cm.bindProcessToNetwork(null)
-        PrinterNetworkHolder.networkCallback?.let { cm.unregisterNetworkCallback(it) }
-        PrinterNetworkHolder.wifiNetwork = null
-        PrinterNetworkHolder.networkCallback = null
-      }
+      status == 0
+    } catch (e: Exception) {
+      Log.e(TAG, "Print error", e)
+      false
     }
   }
 }

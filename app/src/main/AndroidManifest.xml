@@ -2,30 +2,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-permission
-        android:name="android.permission.BLUETOOTH"
-        android:maxSdkVersion="30" />
-    <uses-permission
-        android:name="android.permission.BLUETOOTH_ADMIN"
-        android:maxSdkVersion="30" />
+    <!-- Разрешения -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Фичи -->
     <uses-feature android:name="android.hardware.usb.host" />
-
     <uses-permission android:name="android.hardware.usb.host" />
     <uses-permission android:name="android.permission.USB_PERMISSION" />
 
@@ -43,39 +36,61 @@
         android:supportsRtl="true"
         android:testOnly="false"
         android:theme="@style/Theme.IMovePrinter">
+
+        <!-- Главная активити с обработкой PDF -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@style/Theme.IMovePrinter">
+
+            <!-- Запуск из лаунчера -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Обработка отправки PDF из других приложений -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+
+            <!-- Обработка открытия PDF -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
         </activity>
+
+        <!-- Активити предпросмотра PDF -->
         <activity
             android:name=".screens.PdfPrintPreviewActivity"
             android:exported="true">
+
+            <!-- Специфичный интент для веб-ссылок -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
-
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-
                 <data
                     android:host="system.checku.com.ua"
                     android:pathPrefix="/jri/report"
                     android:scheme="https" />
             </intent-filter>
+
+            <!-- Открытие PDF -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
-
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-
                 <data android:mimeType="application/pdf" />
             </intent-filter>
         </activity>
 
+        <!-- Сервис печати -->
         <service
             android:name="ua.com.sdegroup.imoveprinter.service.ThermalPrintService"
             android:exported="true"
@@ -87,5 +102,6 @@
                 android:name="android.printservice"
                 android:resource="@xml/print_service" />
         </service>
+
     </application>
 </manifest>

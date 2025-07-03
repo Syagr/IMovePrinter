@@ -170,8 +170,6 @@ class ThermalPrintService : PrintService() {
         PrinterHelper.printBitmap(0, 0, 0, bitmap, 0, false, 1)
 
         PrinterHelper.openEndStatic(true)
-        PrinterHelper.Form()
-        PrinterHelper.Print()
         val status = PrinterHelper.getEndStatus(16)
         PrinterHelper.openEndStatic(false)
 

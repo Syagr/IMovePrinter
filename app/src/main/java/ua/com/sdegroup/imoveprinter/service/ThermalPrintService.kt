@@ -61,18 +61,31 @@ class ThermalPrintService : PrintService() {
       val prefs = context.getSharedPreferences("printer_prefs", Context.MODE_PRIVATE)
       val type = prefs.getString("printer_connection_type", "") ?: ""
       val addr = prefs.getString("printer_address", "") ?: ""
-      if (type.isBlank() || addr.isBlank()) return false
+      if (type.isBlank() || addr.isBlank()) {
+        Log.e(TAG, "Printer connection info missing: type='$type', addr='$addr'")
+        return false
+      }
 
       if (type == "WiFi") {
-        (context.getSystemService(ConnectivityManager::class.java))
-          ?.bindProcessToNetwork(PrinterNetworkHolder.wifiNetwork)
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager?
+        val net = PrinterNetworkHolder.wifiNetwork
+        if (cm == null || net == null) {
+          Log.e(TAG, "Cannot bind to Wi-Fi network: cm=$cm, net=$net")
+          return false
+        }
+        cm.bindProcessToNetwork(net)
       }
+
       if (!PrinterHelper.IsOpened()) {
-        val rc = if (type == "Bluetooth")
-          PrinterHelper.portOpenBT(context, addr)
-        else
-          PrinterHelper.portOpenWIFI(context, addr)
-        if (rc != 0) return false
+        val rc = when (type) {
+          "Bluetooth" -> PrinterHelper.portOpenBT(context, addr)
+          "WiFi" -> PrinterHelper.portOpenWIFI(context, addr)
+          else -> -1
+        }
+        if (rc != 0) {
+          Log.e(TAG, "Failed to open port for $type at $addr: code=$rc")
+          return false
+        }
       }
 
       return try {
@@ -90,7 +103,7 @@ class ThermalPrintService : PrintService() {
         PrinterHelper.openEndStatic(false)
         status == 0
       } catch (e: Exception) {
-        Log.e(TAG, "directPrint error", e)
+        Log.e(TAG, "sendBitmapToPrinter error", e)
         false
       }
     }

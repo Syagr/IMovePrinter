@@ -71,4 +71,5 @@
     <string name="successfully">успішно</string>
     <string name="print_error">Помилка друку</string>
     <string name="error_download_pdf_preview">Не вдалося завантажити PDF</string>
+    <string name="no_internet">Немає з\'єднання з інтернетом</string>
 </resources>

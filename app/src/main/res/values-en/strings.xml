@@ -68,4 +68,5 @@
     <string name="successfully">successfully</string>
     <string name="print_error">Printing error</string>
     <string name="error_download_pdf_preview">Could not download PDF</string>
+    <string name="no_internet">No internet connection</string>
 </resources>

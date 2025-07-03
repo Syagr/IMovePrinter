@@ -1,11 +1,14 @@
 package ua.com.sdegroup.imoveprinter
 
+import android.util.Log
+import android.net.ConnectivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
+import android.net.NetworkCapabilities
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
@@ -30,7 +33,7 @@ import java.util.*
 class MainActivity : ComponentActivity() {
 
   private lateinit var currentLanguage: MutableState<String>
-
+  private val TAG = "MainActivity"
   override fun attachBaseContext(newBase: Context) {
     val prefs = newBase.getSharedPreferences("app_prefs", MODE_PRIVATE)
     val lang = prefs.getString(
@@ -94,34 +97,49 @@ class MainActivity : ComponentActivity() {
     handleShareIntent(intent)
   }
 
-  private fun handleShareIntent(i: Intent): Boolean {
-    if (i.action != Intent.ACTION_SEND) return false
-    val errorDownloadPdfPreview = getString(R.string.error_download_pdf_preview)
-    val pdfUri = i.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: i.data
+  private fun handleShareIntent(intent: Intent): Boolean {
+    if (intent.action != Intent.ACTION_SEND) return false
+
+    val cm = getSystemService(ConnectivityManager::class.java) as ConnectivityManager
+
+    cm.bindProcessToNetwork(null)
+
+    val mobileOrWifiNet = cm.allNetworks.firstOrNull { network ->
+      cm.getNetworkCapabilities(network)
+        ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+    }
+
+    if (mobileOrWifiNet != null) {
+      cm.bindProcessToNetwork(mobileOrWifiNet)
+    }
+
+    val pdfUri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: intent.data
     if (pdfUri != null) {
       directPrint(pdfUri)
       return true
     }
 
-    if (i.type == "text/plain") {
-      i.getStringExtra(Intent.EXTRA_TEXT)?.let { url ->
-        lifecycleScope.launch {
-          val uri = downloadToCache(url)
-          if (uri != null) {
-            directPrint(uri)
-          } else {
-            withContext(Dispatchers.Main) {
+    if (intent.type == "text/plain") {
+      intent.getStringExtra(Intent.EXTRA_TEXT)
+        ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        ?.let { url ->
+          val errorDownload = getString(R.string.error_download_pdf_preview)
+          val noInternet = getString(R.string.no_internet)
+
+          lifecycleScope.launch {
+            val cachedUri = downloadToCache(url)
+            if (cachedUri != null) {
+              directPrint(cachedUri)
+            } else {
               Toast.makeText(
-                this@MainActivity,
-                errorDownloadPdfPreview,
+                this@MainActivity, getString(R.string.error_download_pdf_preview),
                 Toast.LENGTH_SHORT
               ).show()
+              finish()
             }
-            finish()
           }
+          return true
         }
-        return true
-      }
     }
 
     return false
@@ -146,19 +164,54 @@ class MainActivity : ComponentActivity() {
     }
   }
 
-  private suspend fun downloadToCache(url: String): Uri? = withContext(Dispatchers.IO) {
-    return@withContext try {
-      val conn = URL(url).openConnection() as HttpURLConnection
-      conn.connect()
+  private suspend fun downloadToCache(rawUrl: String): Uri? = withContext(Dispatchers.IO) {
+    val url = rawUrl.trim()
+    val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+    val internetNet = cm.allNetworks.firstOrNull { net ->
+      cm.getNetworkCapabilities(net)?.run {
+        hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                && hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+      } == true
+    }
+    if (internetNet == null) {
+      Log.e(TAG, "No validated internet network available")
+      return@withContext null
+    }
+
+    if (!cm.bindProcessToNetwork(internetNet)) {
+      Log.e(TAG, "Failed to bind process to network $internetNet")
+      return@withContext null
+    }
+
+    try {
+      val urlObj = URL(url)
+      val conn = (internetNet.openConnection(urlObj) as HttpURLConnection).apply {
+        connectTimeout = 10_000
+        readTimeout = 10_000
+        requestMethod = "GET"
+        connect()
+      }
+
+      if (conn.responseCode != HttpURLConnection.HTTP_OK) {
+        Log.e(TAG, "Server returned HTTP ${conn.responseCode} ${conn.responseMessage}")
+        return@withContext null
+      }
+
       val f = File(cacheDir, "shared.pdf")
       conn.inputStream.use { inp ->
-        FileOutputStream(f).use { out -> inp.copyTo(out) }
+        FileOutputStream(f).use { out ->
+          inp.copyTo(out)
+        }
       }
-      conn.disconnect()
-      Uri.fromFile(f)
+      return@withContext Uri.fromFile(f)
+
     } catch (e: Exception) {
-      e.printStackTrace()
-      null
+      Log.e(TAG, "downloadToCache($url) failed: ${e.javaClass.simpleName}: ${e.message}")
+      return@withContext null
+
+    } finally {
+      cm.bindProcessToNetwork(null)
     }
   }
 

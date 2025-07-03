@@ -72,4 +72,14 @@
     <string name="print_error">Помилка друку</string>
     <string name="error_download_pdf_preview">Не вдалося завантажити PDF</string>
     <string name="no_internet">Немає з\'єднання з інтернетом</string>
+    <string name="error_invalid_job_id">Невірний ідентифікатор завдання</string>
+    <string name="error_no_type_and_address">Не вказано тип та адресу принтера</string>
+    <string name="error_no_connection_type">Не вказано тип з’єднання</string>
+    <string name="error_no_printer_address">Не вказано адресу принтера</string>
+    <string name="error_no_print_data">Немає даних для друку</string>
+    <string name="error_render_page">Не вдалося відрендерити сторінку %1$d</string>
+    <string name="error_print_page">Помилка друку сторінки %1$d</string>
+    <string name="error_print_generic">Помилка друку: %1$s</string>
+    <string name="print_error_title">Ошибка принтера: %1$s</string>
+    <string name="error_notifications_disabled">Помилка сповіщення вимкнено</string>
 </resources>

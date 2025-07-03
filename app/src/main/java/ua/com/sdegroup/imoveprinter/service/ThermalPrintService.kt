@@ -25,6 +25,9 @@ import kotlin.math.roundToInt
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.net.Uri
+import ua.com.sdegroup.imoveprinter.R
+import ua.com.sdegroup.imoveprinter.util.getFileNameFromUri
+import ua.com.sdegroup.imoveprinter.util.showSystemPrintError
 
 class ThermalPrintService : PrintService() {
 
@@ -34,27 +37,85 @@ class ThermalPrintService : PrintService() {
     private const val PRINTER_DPI = 203
 
     fun printDirect(context: Context, uri: Uri) {
+      val prefs = context.getSharedPreferences("printer_prefs", Context.MODE_PRIVATE)
+      val type = prefs.getString("printer_connection_type", "").orEmpty()
+      val addr = prefs.getString("printer_address", "").orEmpty()
+
+      val fileName = getFileNameFromUri(context, uri)
+
+      if (type.isBlank() || addr.isBlank()) {
+        val msg = when {
+          type.isBlank() && addr.isBlank() ->
+            context.getString(R.string.error_no_type_and_address)
+
+          type.isBlank() ->
+            context.getString(R.string.error_no_connection_type)
+
+          else ->
+            context.getString(R.string.error_no_printer_address)
+        }
+        Log.e(TAG, msg)
+        showSystemPrintError(context, fileName, msg)
+        return
+      }
+
       val tmp = File(context.cacheDir, "direct_print.pdf")
-      context.contentResolver.openInputStream(uri)!!.use { inp ->
-        FileOutputStream(tmp).use { out -> inp.copyTo(out) }
+      try {
+        context.contentResolver.openInputStream(uri)?.use { inp ->
+          FileOutputStream(tmp).use { out -> inp.copyTo(out) }
+        } ?: run {
+          val msg = context.getString(R.string.error_no_print_data)
+          Log.e(TAG, msg)
+          showSystemPrintError(context, fileName, msg)
+          return
+        }
+      } catch (e: Exception) {
+        val msg = context.getString(R.string.error_print_generic, e.message ?: "")
+        Log.e(TAG, msg, e)
+        showSystemPrintError(context, fileName, msg)
+        return
       }
 
       runBlocking {
-        val renderer = PdfRenderer(
-          ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY)
-        )
-        for (i in 0 until renderer.pageCount) {
-          val bmp = convertPdfPageToBitmap(context, tmp, i, 90, 90)
-          if (bmp != null) {
-            if (!sendBitmapToPrinter(context, bmp)) {
-              Log.e(TAG, "directPrint: page $i failed")
+        var renderer: PdfRenderer? = null
+        var fd: ParcelFileDescriptor? = null
+
+        try {
+          fd = ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY)
+          renderer = PdfRenderer(fd)
+
+          for (i in 0 until renderer.pageCount) {
+            val bmp = convertPdfPageToBitmap(context, tmp, i, 90, 90)
+            if (bmp == null) {
+              val msg = context.getString(R.string.error_render_page, i + 1)
+              Log.e(TAG, msg)
+              showSystemPrintError(context, fileName, msg)
+              break
             }
+
+            val ok = sendBitmapToPrinter(context, bmp)
+            if (!ok) {
+              val msg = context.getString(R.string.error_print_page, i + 1)
+              Log.e(TAG, msg)
+              showSystemPrintError(context, fileName, msg)
+              break
+            }
+
             delay(200)
           }
+
+        } catch (e: Exception) {
+          val msg = context.getString(R.string.error_print_generic, e.message ?: "")
+          Log.e(TAG, msg, e)
+          showSystemPrintError(context, fileName, msg)
+
+        } finally {
+          renderer?.close()
+          fd?.close()
         }
-        renderer.close()
       }
     }
+
 
     @SuppressLint("ServiceCast")
     private fun sendBitmapToPrinter(context: Context, bitmap: Bitmap): Boolean {
@@ -62,7 +123,10 @@ class ThermalPrintService : PrintService() {
       val type = prefs.getString("printer_connection_type", "") ?: ""
       val addr = prefs.getString("printer_address", "") ?: ""
       if (type.isBlank() || addr.isBlank()) {
-        Log.e(TAG, "Printer connection info missing: type='$type', addr='$addr'")
+        Log.e(
+          TAG,
+          "Відсутні дані підключення: type='$type', addr='$addr' / Connection info missing: type='$type', addr='$addr'"
+        )
         return false
       }
 
@@ -70,7 +134,10 @@ class ThermalPrintService : PrintService() {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager?
         val net = PrinterNetworkHolder.wifiNetwork
         if (cm == null || net == null) {
-          Log.e(TAG, "Cannot bind to Wi-Fi network: cm=$cm, net=$net")
+          Log.e(
+            TAG,
+            "Не вдалося прив'язати до Wi-Fi: cm=$cm, net=$net / Cannot bind to Wi-Fi: cm=$cm, net=$net"
+          )
           return false
         }
         cm.bindProcessToNetwork(net)
@@ -83,7 +150,10 @@ class ThermalPrintService : PrintService() {
           else -> -1
         }
         if (rc != 0) {
-          Log.e(TAG, "Failed to open port for $type at $addr: code=$rc")
+          Log.e(
+            TAG,
+            "Не вдалося відкрити порт $type за адресою $addr: код=$rc / Failed to open $type port at $addr: code=$rc"
+          )
           return false
         }
       }
@@ -98,15 +168,45 @@ class ThermalPrintService : PrintService() {
           "0"
         )
         PrinterHelper.printBitmap(0, 0, 0, bitmap, 0, false, 1)
+
         PrinterHelper.openEndStatic(true)
+        PrinterHelper.Form()
+        PrinterHelper.Print()
         val status = PrinterHelper.getEndStatus(16)
         PrinterHelper.openEndStatic(false)
-        status == 0
+
+        when (status) {
+          0 -> {
+            Log.i(TAG, "Друк завершено успішно. / Print completed successfully.")
+            true
+          }
+
+          1 -> {
+            Log.e(TAG, "Помилка: закінчився папір. / Error: Out of paper.")
+            false
+          }
+
+          2 -> {
+            Log.e(TAG, "Помилка: кришка відкрита. / Error: Cover is open.")
+            false
+          }
+
+          -1 -> {
+            Log.e(TAG, "Помилка: тайм від принтера. / Error: Printer timeout.")
+            false
+          }
+
+          else -> {
+            Log.e(TAG, "Невідомий код статусу: $status. / Unknown status code: $status.")
+            false
+          }
+        }
       } catch (e: Exception) {
-        Log.e(TAG, "sendBitmapToPrinter error", e)
+        Log.e(TAG, "Виняток під час друку: ${e.message} / Exception during print: ${e.message}", e)
         false
       }
     }
+
 
     private suspend fun convertPdfPageToBitmap(
       context: Context,
@@ -213,26 +313,57 @@ class ThermalPrintService : PrintService() {
 
   override fun onPrintJobQueued(job: PrintJob) {
     val jobId = job.info.id ?: run {
-      job.fail("Invalid job id"); return
+      val msg = getString(R.string.error_invalid_job_id)
+      Log.e(TAG, msg)
+      job.fail(msg)
+      showSystemPrintError(applicationContext, "unknown.pdf", msg)
+      return
     }
     job.start()
-    val pfd = job.document?.data ?: run {
-      job.fail("No data"); return
+
+    val fileName = job.info.label?.takeIf { it.isNotBlank() } ?: "document.pdf"
+
+    val prefs = applicationContext
+      .getSharedPreferences("printer_prefs", Context.MODE_PRIVATE)
+    val type = prefs.getString("printer_connection_type", "").orEmpty()
+    val addr = prefs.getString("printer_address", "").orEmpty()
+    if (type.isBlank() || addr.isBlank()) {
+      val msg = when {
+        type.isBlank() && addr.isBlank() ->
+          getString(R.string.error_no_type_and_address)
+
+        type.isBlank() ->
+          getString(R.string.error_no_connection_type)
+
+        else ->
+          getString(R.string.error_no_printer_address)
+      }
+      Log.e(TAG, msg)
+      job.fail(msg)
+      showSystemPrintError(applicationContext, fileName, msg)
+      return
     }
+
     val tempPdf = File(cacheDir, "print_$jobId.pdf")
+    job.document?.data?.use { pfd ->
+      FileInputStream(pfd.fileDescriptor).use { fis ->
+        FileOutputStream(tempPdf).use { fos ->
+          fis.copyTo(fos)
+        }
+      }
+    } ?: run {
+      val msg = getString(R.string.error_no_print_data)
+      Log.e(TAG, msg)
+      job.fail(msg)
+      showSystemPrintError(applicationContext, fileName, msg)
+      return
+    }
 
     serviceScope.launch {
       var fd: ParcelFileDescriptor? = null
       var renderer: PdfRenderer? = null
-      try {
-        pfd.use { fdRaw ->
-          FileInputStream(fdRaw.fileDescriptor).use { fis ->
-            FileOutputStream(tempPdf).use { fos ->
-              fis.copyTo(fos)
-            }
-          }
-        }
 
+      try {
         fd = ParcelFileDescriptor.open(tempPdf, ParcelFileDescriptor.MODE_READ_ONLY)
         renderer = PdfRenderer(fd)
 
@@ -243,19 +374,34 @@ class ThermalPrintService : PrintService() {
             pageIndex,
             addLeftMarginPx = 90,
             addTopMarginPx = 90
-          ) ?: throw IllegalStateException("Failed to render page $pageIndex")
+          ) ?: run {
+            val msg = getString(R.string.error_render_page, pageIndex + 1)
+            Log.e(TAG, msg)
+            showSystemPrintError(applicationContext, fileName, msg)
+            withContext(Dispatchers.Main) { job.fail(msg) }
+            return@launch
+          }
 
           val ok = sendBitmapToPrinter(applicationContext, bitmap)
           if (!ok) {
-            throw IllegalStateException("Print error on page $pageIndex")
+            val msg = getString(R.string.error_print_page, pageIndex + 1)
+            Log.e(TAG, msg)
+            showSystemPrintError(applicationContext, fileName, msg)
+            withContext(Dispatchers.Main) { job.fail(msg) }
+            return@launch
           }
+
           delay(200)
         }
 
         withContext(Dispatchers.Main) { job.complete() }
+
       } catch (e: Exception) {
+        val msg = getString(R.string.error_print_generic, e.message ?: "")
         Log.e(TAG, "Printing failed", e)
-        withContext(Dispatchers.Main) { job.fail("Error: ${e.message}") }
+        showSystemPrintError(applicationContext, fileName, msg)
+        withContext(Dispatchers.Main) { job.fail(msg) }
+
       } finally {
         renderer?.close()
         fd?.close()

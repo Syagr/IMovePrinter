@@ -69,4 +69,14 @@
     <string name="print_error">Printing error</string>
     <string name="error_download_pdf_preview">Could not download PDF</string>
     <string name="no_internet">No internet connection</string>
+    <string name="error_invalid_job_id">Invalid job ID</string>
+    <string name="error_no_type_and_address">No printer type and address</string>
+    <string name="error_no_connection_type">No connection type</string>
+    <string name="error_no_printer_address">No printer address</string>
+    <string name="error_no_print_data">No print data</string>
+    <string name="error_render_page">Failed to render page %1$d</string>
+    <string name="error_print_page">Print error on page %1$d</string>
+    <string name="error_print_generic">Print error: %1$s</string>
+    <string name="print_error_title">Printer error: %1$s</string>
+    <string name="error_notifications_disabled">Error notifications disabled</string>
 </resources>

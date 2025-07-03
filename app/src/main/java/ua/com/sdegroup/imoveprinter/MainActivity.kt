@@ -3,270 +3,171 @@ package ua.com.sdegroup.imoveprinter
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
-import android.graphics.Bitmap
-import android.graphics.pdf.PdfDocument
-import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Bundle
-import android.os.ParcelFileDescriptor
-import android.print.*
+import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.Composable
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import ua.com.sdegroup.imoveprinter.service.ThermalPrintService
+import ua.com.sdegroup.imoveprinter.screens.*
+import ua.com.sdegroup.imoveprinter.ui.theme.IMovePrinterTheme
+import androidx.activity.compose.setContent
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import ua.com.sdegroup.imoveprinter.screens.*
-import ua.com.sdegroup.imoveprinter.ui.theme.IMovePrinterTheme
+import java.io.File
 import java.io.FileOutputStream
-import java.util.Locale
-import android.print.pdf.PrintedPdfDocument
-import android.util.Log
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.*
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var currentLanguage: MutableState<String>
+  private lateinit var currentLanguage: MutableState<String>
 
-    override fun attachBaseContext(newBase: Context) {
-        val prefs = newBase.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val savedLang = prefs.getString("language", null)
-        val lang = savedLang ?: Locale.getDefault().language.takeIf { it == "en" } ?: "uk"
+  override fun attachBaseContext(newBase: Context) {
+    val prefs = newBase.getSharedPreferences("app_prefs", MODE_PRIVATE)
+    val lang = prefs.getString(
+      "language",
+      Locale.getDefault().language.takeIf { it == "en" } ?: "uk"
+    )!!
+    val locale = Locale(lang)
+    Locale.setDefault(locale)
+    val cfg = Configuration(newBase.resources.configuration).apply {
+      setLocale(locale)
+      setLayoutDirection(locale)
+    }
+    super.attachBaseContext(newBase.createConfigurationContext(cfg))
+  }
 
-        val locale = Locale(lang)
-        Locale.setDefault(locale)
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    enableEdgeToEdge()
 
-        val config = Configuration(newBase.resources.configuration)
-        config.setLocale(locale)
-        config.setLayoutDirection(locale)
+    if (handleShareIntent(intent)) return
 
-        super.attachBaseContext(newBase.createConfigurationContext(config))
+    val defaultLang = getSavedLanguage()
+      ?: Locale.getDefault().language.takeIf { it == "en" } ?: "uk"
+    currentLanguage = mutableStateOf(defaultLang)
+
+    setContent {
+      IMovePrinterTheme {
+        val navController = rememberNavController()
+        NavHost(navController, startDestination = "printer_setup") {
+          composable("printer_setup") { back ->
+            PrinterSetup(navController, back, currentLanguage.value) { new ->
+              if (new != currentLanguage.value) {
+                saveLanguage(new)
+                currentLanguage.value = new
+                recreate()
+              }
+            }
+          }
+          composable("device_list") {
+            DeviceList(navController, currentLanguage.value) { new ->
+              saveLanguage(new); currentLanguage.value = new; recreate()
+            }
+          }
+          composable("bluetooth_discovery") {
+            BluetoothDiscoveryScreen(navController, currentLanguage.value) { new ->
+              saveLanguage(new); currentLanguage.value = new; recreate()
+            }
+          }
+          composable("wifi_discovery") {
+            WifiDiscoveryScreen(navController, currentLanguage.value) { new ->
+              saveLanguage(new); currentLanguage.value = new; recreate()
+            }
+          }
+        }
+      }
+    }
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    handleShareIntent(intent)
+  }
+
+  private fun handleShareIntent(i: Intent): Boolean {
+    if (i.action != Intent.ACTION_SEND) return false
+    val errorDownloadPdfPreview = getString(R.string.error_download_pdf_preview)
+    val pdfUri = i.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: i.data
+    if (pdfUri != null) {
+      directPrint(pdfUri)
+      return true
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-
-        val intent = intent
-
-        if (intent?.action == Intent.ACTION_SEND && intent.type == "application/pdf") {
-            intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.let { uri ->
-                lifecycleScope.launch {
-                    withContext(Dispatchers.Main) {
-                        if (!isFinishing && !isDestroyed) {
-                            printPdfFromUri(uri)
-                        }
-                    }
-                }
-            }
-            return
-        } else if (intent?.action == Intent.ACTION_VIEW && intent.type == "application/pdf") {
-            intent.data?.let { uri ->
-                lifecycleScope.launch {
-                    withContext(Dispatchers.Main) {
-                        if (!isFinishing && !isDestroyed) {
-                            printPdfFromUri(uri)
-                        }
-                    }
-                }
-            }
-            return
-        }
-
-        val savedLanguage = getSavedLanguagePreference()
-        val defaultLang = savedLanguage ?: Locale.getDefault().language.takeIf { it == "en" } ?: "uk"
-        currentLanguage = mutableStateOf(defaultLang)
-
-        setContent {
-            IMovePrinterTheme {
-                AppNavigation(currentLanguage.value) { newLang ->
-                    if (newLang != currentLanguage.value) {
-                        saveLanguagePreference(newLang)
-                        currentLanguage.value = newLang
-                        recreate()
-                    }
-                }
-            }
-        }
-    }
-
-    private fun printPdfFromUri(uri: Uri) {
-        lifecycleScope.launchWhenResumed {
-            if (isFinishing || isDestroyed) {
-                Log.e("PrintDebug", "Activity is not in a valid state: isFinishing=$isFinishing, isDestroyed=$isDestroyed")
-                return@launchWhenResumed
-            }
-
-            try {
-                Log.d("PrintDebug", "Attempting to start print job. Activity state: isFinishing=$isFinishing, isDestroyed=$isDestroyed")
-                val printManager = this@MainActivity.getSystemService(Context.PRINT_SERVICE) as PrintManager
-                val printAdapter = object : PrintDocumentAdapter() {
-                    override fun onLayout(
-                        oldAttributes: PrintAttributes?,
-                        newAttributes: PrintAttributes?,
-                        cancellationSignal: android.os.CancellationSignal?,
-                        callback: LayoutResultCallback?,
-                        extras: android.os.Bundle?
-                    ) {
-                        callback?.onLayoutFinished(
-                            PrintDocumentInfo.Builder("document.pdf").setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).build(),
-                            true
-                        )
-                    }
-
-                    override fun onWrite(
-                        pages: Array<PageRange>?,
-                        destination: ParcelFileDescriptor?,
-                        cancellationSignal: android.os.CancellationSignal?,
-                        callback: WriteResultCallback?
-                    ) {
-                        try {
-                            contentResolver.openInputStream(uri)?.use { input ->
-                                FileOutputStream(destination?.fileDescriptor).use { output ->
-                                    input.copyTo(output)
-                                }
-                            }
-                            callback?.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
-                        } catch (e: Exception) {
-                            Log.e("PrintDebug", "Error writing PDF: ${e.message}", e)
-                            callback?.onWriteFailed(e.message)
-                        }
-                    }
-                }
-
-                Log.d("PrintDebug", "Starting print job with valid Activity context")
-                printManager.print("PDF Document", printAdapter, null)
-            } catch (e: Exception) {
-                Log.e("PrintDebug", "Error initializing PrintManager: ${e.message}", e)
-            }
-        }
-    }
-
-    private fun printBitmap(bitmap: Bitmap, printManager: PrintManager, jobName: String) {
+    if (i.type == "text/plain") {
+      i.getStringExtra(Intent.EXTRA_TEXT)?.let { url ->
         lifecycleScope.launch {
-            val printAdapter = object : PrintDocumentAdapter() {
-                private var pdfDocument: PrintedPdfDocument? = null
-                private var printAttributes: PrintAttributes? = null
-
-                override fun onLayout(
-                    oldAttributes: PrintAttributes?,
-                    newAttributes: PrintAttributes,
-                    cancellationSignal: android.os.CancellationSignal,
-                    callback: LayoutResultCallback,
-                    extras: Bundle?
-                ) {
-                    printAttributes = newAttributes
-                    pdfDocument = PrintedPdfDocument(this@MainActivity, newAttributes)
-
-                    if (cancellationSignal.isCanceled) {
-                        callback.onLayoutCancelled()
-                        return
-                    }
-
-                    val info = PrintDocumentInfo.Builder(jobName)
-                        .setContentType(PrintDocumentInfo.CONTENT_TYPE_PHOTO)
-                        .setPageCount(1)
-                        .build()
-
-                    callback.onLayoutFinished(info, true)
-                }
-
-                override fun onWrite(
-                    pages: Array<PageRange>,
-                    destination: ParcelFileDescriptor,
-                    cancellationSignal: android.os.CancellationSignal,
-                    callback: WriteResultCallback
-                ) {
-                    val page = pdfDocument?.startPage(0)
-
-                    if (cancellationSignal.isCanceled) {
-                        callback.onWriteCancelled()
-                        pdfDocument?.close()
-                        pdfDocument = null
-                        return
-                    }
-
-                    page?.canvas?.drawBitmap(bitmap, 0f, 0f, null)
-                    pdfDocument?.finishPage(page)
-
-                    try {
-                        pdfDocument?.writeTo(FileOutputStream(destination.fileDescriptor))
-                    } catch (e: Exception) {
-                        callback.onWriteFailed(e.message)
-                        return
-                    } finally {
-                        pdfDocument?.close()
-                        pdfDocument = null
-                    }
-
-                    callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
-                }
-            }
-
+          val uri = downloadToCache(url)
+          if (uri != null) {
+            directPrint(uri)
+          } else {
             withContext(Dispatchers.Main) {
-                if (!isFinishing && !isDestroyed) {
-                    printManager.print(jobName, printAdapter, null)
-                }
+              Toast.makeText(
+                this@MainActivity,
+                errorDownloadPdfPreview,
+                Toast.LENGTH_SHORT
+              ).show()
             }
+            finish()
+          }
         }
+        return true
+      }
     }
 
-    private fun saveLanguagePreference(language: String) {
-        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putString("language", language).apply()
-    }
+    return false
+  }
 
-    private fun getSavedLanguagePreference(): String? {
-        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        return prefs.getString("language", null)
+  private fun directPrint(uri: Uri) {
+    val printError = getString(R.string.print_error)
+    lifecycleScope.launch(Dispatchers.IO) {
+      try {
+        ThermalPrintService.printDirect(this@MainActivity, uri)
+      } catch (e: Exception) {
+        withContext(Dispatchers.Main) {
+          Toast.makeText(
+            this@MainActivity,
+            "$printError: ${e.message}",
+            Toast.LENGTH_LONG
+          ).show()
+        }
+      } finally {
+        finish()
+      }
     }
-}
+  }
 
-@Composable
-fun AppNavigation(
-    currentLanguage: String,
-    onLanguageChange: (String) -> Unit
-) {
-    val navController = rememberNavController()
-
-    NavHost(
-        navController = navController,
-        startDestination = "printer_setup"
-    ) {
-        composable("printer_setup") { backStackEntry ->
-            PrinterSetup(
-                navController = navController,
-                backStackEntry = backStackEntry,
-                currentLanguage = currentLanguage,
-                onLanguageChange = onLanguageChange
-            )
-        }
-        composable("device_list") {
-            DeviceList(
-                navController = navController,
-                currentLanguage = currentLanguage,
-                onLanguageChange = onLanguageChange
-            )
-        }
-        composable("bluetooth_discovery") {
-            BluetoothDiscoveryScreen(
-                navController = navController,
-                currentLanguage = currentLanguage,
-                onLanguageChange = onLanguageChange
-            )
-        }
-        composable("wifi_discovery") {
-            WifiDiscoveryScreen(
-                navController = navController,
-                currentLanguage = currentLanguage,
-                onLanguageChange = onLanguageChange
-            )
-        }
+  private suspend fun downloadToCache(url: String): Uri? = withContext(Dispatchers.IO) {
+    return@withContext try {
+      val conn = URL(url).openConnection() as HttpURLConnection
+      conn.connect()
+      val f = File(cacheDir, "shared.pdf")
+      conn.inputStream.use { inp ->
+        FileOutputStream(f).use { out -> inp.copyTo(out) }
+      }
+      conn.disconnect()
+      Uri.fromFile(f)
+    } catch (e: Exception) {
+      e.printStackTrace()
+      null
     }
+  }
+
+  private fun saveLanguage(lang: String) {
+    getSharedPreferences("app_prefs", MODE_PRIVATE)
+      .edit().putString("language", lang).apply()
+  }
+
+  private fun getSavedLanguage(): String? =
+    getSharedPreferences("app_prefs", MODE_PRIVATE)
+      .getString("language", null)
 }

@@ -66,4 +66,6 @@
     <string name="pdf_preview">PDF Preview</string>
     <string name="error_open_pdf_preview">Could not open PDF</string>
     <string name="successfully">successfully</string>
+    <string name="print_error">Printing error</string>
+    <string name="error_download_pdf_preview">Could not download PDF</string>
 </resources>

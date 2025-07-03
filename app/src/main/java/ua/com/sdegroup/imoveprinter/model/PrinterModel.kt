@@ -165,7 +165,6 @@ class PrinterModel(
             if (PrinterHelper.IsOpened()) {
                 PrinterHelper.portClose()
                 Thread.sleep(200)
-                Log.d(TAG, "Previous connection closed")
             }
 
             if (addressOrIp.isBlank()) {
@@ -175,21 +174,26 @@ class PrinterModel(
 
             val result = when (type) {
                 "Bluetooth" -> PrinterHelper.portOpenBT(context, addressOrIp)
-                "WiFi" -> PrinterHelper.portOpenWIFI(context, addressOrIp)
-                else -> -99
+                "WiFi"      -> PrinterHelper.portOpenWIFI(context, addressOrIp)
+                else        -> -99
             }
 
             Log.d(TAG, "Connection result ($type): $result")
-            if (result != 0) {
-                Log.e(TAG, "Failed to connect to $type printer. Error code: $result")
+            val success = result == 0
+            if (success) {
+                context
+                    .getSharedPreferences("printer_prefs", Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("printer_connection_type", type)
+                    .putString("printer_address", addressOrIp)
+                    .apply()
             }
-            return result == 0
+            return success
         } catch (e: Exception) {
             Log.e(TAG, "Exception during $type connection", e)
             return false
         }
     }
-
 
     suspend fun getStatus(type: String): String {
         delay(300)

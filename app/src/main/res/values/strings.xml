@@ -69,4 +69,6 @@
     <string name="pdf_preview">Попередній перегляд PDF</string>
     <string name="error_open_pdf_preview">Не вдалося відкрити PDF</string>
     <string name="successfully">успішно</string>
+    <string name="print_error">Помилка друку</string>
+    <string name="error_download_pdf_preview">Не вдалося завантажити PDF</string>
 </resources>

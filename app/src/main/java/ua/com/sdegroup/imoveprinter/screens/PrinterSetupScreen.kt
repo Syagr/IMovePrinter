@@ -305,7 +305,6 @@ fun PrinterSetup(
               } else true
             }
 
-            // Обновляем статус
             printerStatus = if (printerReady) {
               withContext(Dispatchers.IO) { viewModel.getStatus(connTypes[selType]) }
             } else {

@@ -329,24 +329,62 @@ fun PrinterSetup(
         },
         onPrintReceipt = {
           scope.launch {
-            withContext(Dispatchers.IO) {
+            val type = connTypes[selType]
+            val connected = withContext(Dispatchers.IO) {
               if (!cpcl.PrinterHelper.IsOpened()) {
-                viewModel.connect(context, 0)
-              }
-              viewModel.printTestReceipt()
+                when (type) {
+                  "Bluetooth" -> pairedDevices.getOrNull(selectedIndex)
+                    ?.address
+                    ?.let { mac -> viewModel.connectToPrinter(context, type, mac) }
+                    ?: false
+                  "WiFi"      -> resolvePrinterIp()
+                    ?.let { ip -> viewModel.connectToPrinter(context, type, ip) }
+                    ?: false
+                  else        -> false
+                }
+              } else true
             }
-            statusText = receiptSentLabel
+
+            if (connected) {
+              withContext(Dispatchers.IO) {
+                viewModel.printTestReceipt()
+              }
+              statusText = receiptSentLabel
+            } else {
+              statusText = connectionFailedLabel
+            }
           }
         },
         onPrintPDF = {
           scope.launch {
-            withContext(Dispatchers.IO) {
-              if (!cpcl.PrinterHelper.IsOpened()) {
-                viewModel.connect(context, 0)
+            val type = connTypes[selType]
+            val success = withContext(Dispatchers.IO) {
+              val connected = if (!cpcl.PrinterHelper.IsOpened()) {
+                when (type) {
+                  "Bluetooth" -> pairedDevices.getOrNull(selectedIndex)
+                    ?.address
+                    ?.let { mac -> viewModel.connectToPrinter(context, type, mac) }
+                    ?: false
+                  "WiFi"      -> resolvePrinterIp()
+                    ?.let { ip -> viewModel.connectToPrinter(context, type, ip) }
+                    ?: false
+                  else        -> false
+                }
+              } else true
+
+              if (!connected) return@withContext false
+
+              val pdfUri = viewModel.getPdfUriFromAssets(context, "report.pdf")
+              val bitmap = viewModel.convertPdfPageToBitmap(context, pdfUri, 0)
+
+              if (bitmap != null) {
+                viewModel.sendPdfToPrinter(context, type, bitmap)
+              } else {
+                false
               }
-              viewModel.printPDF(context)
             }
-            statusText = pdfSentLabel
+
+            statusText = if (success) pdfSentLabel else connectionFailedLabel
           }
         }
       )

@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -231,12 +232,24 @@ fun BluetoothDiscoveryScreen(
   Scaffold(
     topBar = {
       TopAppBar(
-        title = { Text(stringResource(id = R.string.bluetooth_discovery).toString()) },
+        title = { Text(stringResource(id = R.string.bluetooth_discovery)) },
         navigationIcon = {
-          IconButton(onClick = { navController.popBackStack() }) {
+          IconButton(onClick = { navController.navigateUp() }) {
             Icon(
               imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-              contentDescription = stringResource(id = R.string.back).toString()
+              contentDescription = stringResource(id = R.string.back)
+            )
+          }
+        },
+        actions = {
+          IconButton(
+            onClick = {
+              viewModel.restartDiscovery(context)
+            }
+          ) {
+            Icon(
+              imageVector = Icons.Default.Refresh,
+              contentDescription = "Refresh Bluetooth"
             )
           }
         }

@@ -11,6 +11,8 @@ package ua.com.sdegroup.imoveprinter.viewmodel
   import android.content.IntentFilter
   import android.content.pm.PackageManager
   import android.os.Build
+  import android.os.Handler
+  import android.os.Looper
   import android.util.Log
   import android.widget.Toast
   import androidx.lifecycle.ViewModel
@@ -47,6 +49,10 @@ package ua.com.sdegroup.imoveprinter.viewmodel
       @SuppressLint("MissingPermission")
       override fun onReceive(context: Context?, intent: Intent?) {
         when (intent?.action) {
+          BluetoothAdapter.ACTION_DISCOVERY_STARTED -> {
+            _isRefreshing.value = true
+            Log.d(TAG, "Discovery started")
+          }
           BluetoothDevice.ACTION_FOUND -> {
             val device: BluetoothDevice? =
               intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
@@ -100,6 +106,7 @@ package ua.com.sdegroup.imoveprinter.viewmodel
         }
 
         val filter = IntentFilter().apply {
+          addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
           addAction(BluetoothDevice.ACTION_FOUND)
           addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
           addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
@@ -111,36 +118,37 @@ package ua.com.sdegroup.imoveprinter.viewmodel
 
     @SuppressLint("MissingPermission")
     fun startDiscovery(context: Context) {
-        if (_context == null) {
-            initializeBluetooth(context)
-        }
+      initializeBluetooth(context)
 
-        if (!hasBluetoothPermissions()) {
-            _bluetoothState.value = BluetoothState.Error("Bluetooth permissions not granted.")
-            return
-        }
+      if (!hasBluetoothPermissions()) {
+        _bluetoothState.value = BluetoothState.Error("Bluetooth permissions not granted.")
+        return
+      }
+      val adapter = bluetoothAdapter
+      if (adapter == null) {
+        _bluetoothState.value = BluetoothState.Error("Bluetooth adapter not initialized.")
+        return
+      }
+      if (!adapter.isEnabled) {
+        _bluetoothState.value = BluetoothState.Error("Bluetooth is not enabled.")
+        return
+      }
 
-        if (bluetoothAdapter == null) {
-            _bluetoothState.value = BluetoothState.Error("Bluetooth adapter not initialized.")
-            return
-        }
+      if (adapter.isDiscovering) {
+        adapter.cancelDiscovery()
+        Log.d(TAG, "Canceled ongoing discovery to start a new one.")
+      }
 
-        if (!bluetoothAdapter!!.isEnabled) {
-            _bluetoothState.value = BluetoothState.Error("Bluetooth is not enabled.")
-            return
-        }
+      _bluetoothDevices.value = emptyList()
+      _isRefreshing.value    = true
+      _bluetoothState.value  = BluetoothState.Discovering
 
-        if (bluetoothAdapter!!.isDiscovering) {
-            bluetoothAdapter!!.cancelDiscovery()
-            Log.d(TAG, "Canceled ongoing discovery to start a new one.")
-        }
-
-        _isRefreshing.value = true
-        _bluetoothState.value = BluetoothState.Discovering
-
-        bluetoothAdapter!!.startDiscovery()
+      Handler(Looper.getMainLooper()).postDelayed({
+        adapter.startDiscovery()
         Log.d(TAG, "Starting Bluetooth discovery")
+      }, 500)
     }
+
 
     @SuppressLint("MissingPermission")
     fun pairDevice(device: BluetoothDevice) {

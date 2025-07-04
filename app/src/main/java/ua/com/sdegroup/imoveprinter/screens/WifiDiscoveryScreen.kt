@@ -92,7 +92,7 @@ fun WifiDiscoveryScreen(
       TopAppBar(
         title = { Text(stringResource(R.string.wifi_discovery)) },
         navigationIcon = {
-          IconButton(onClick = { navController.popBackStack() }) {
+          IconButton(onClick = { navController.navigateUp() }) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
           }
         },

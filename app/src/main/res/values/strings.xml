@@ -80,6 +80,6 @@
     <string name="error_render_page">Не вдалося відрендерити сторінку %1$d</string>
     <string name="error_print_page">Помилка друку сторінки %1$d</string>
     <string name="error_print_generic">Помилка друку: %1$s</string>
-    <string name="print_error_title">Ошибка принтера: %1$s</string>
+    <string name="print_error_title">Помилка принтера: %1$s</string>
     <string name="error_notifications_disabled">Помилка сповіщення вимкнено</string>
 </resources>

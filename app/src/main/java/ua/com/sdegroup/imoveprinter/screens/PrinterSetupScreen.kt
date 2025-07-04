@@ -17,6 +17,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -57,43 +60,35 @@ fun unpairDevice(device: BluetoothDevice): Boolean {
   }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrinterNameField(
+fun EditablePrinterNameFieldStyled(
   printerName: String,
-  onNameChange: (String) -> Unit
+  onNameChange: (String) -> Unit,
+  isEditing: Boolean,
+  onToggleEdit: () -> Unit
 ) {
-  OutlinedTextField(
-    value = printerName,
-    onValueChange = onNameChange,
-    modifier = Modifier
-      .fillMaxWidth()
-      .padding(vertical = 8.dp),
-    singleLine = true,
-
-    label = {
-      Text(
-        text = stringResource(R.string.printer_name),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-      )
-    },
-
-    textStyle = MaterialTheme.typography.bodyMedium.copy(
-      color = MaterialTheme.colorScheme.onSurface
-    ),
-
-    shape = RoundedCornerShape(12.dp),
-    colors = TextFieldDefaults.outlinedTextFieldColors(
-      containerColor = MaterialTheme.colorScheme.surface,
-      focusedBorderColor = MaterialTheme.colorScheme.primary,
-      unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-      cursorColor = MaterialTheme.colorScheme.primary,
-      focusedLabelColor = MaterialTheme.colorScheme.primary,
-      unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    modifier = Modifier.fillMaxWidth()
+  ) {
+    OutlinedTextField(
+      value = printerName,
+      onValueChange = onNameChange,
+      enabled = isEditing,
+      label = { Text(stringResource(id = R.string.printer_name)) },
+      modifier = Modifier.weight(1f),
+      singleLine = true
     )
-  )
+
+    IconButton(onClick = onToggleEdit) {
+      Icon(
+        imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Edit,
+        contentDescription = if (isEditing) "Save Name" else "Edit Name"
+      )
+    }
+  }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -117,19 +112,13 @@ fun PrinterSetup(
   var hasScan by remember { mutableStateOf(false) }
 
   val printerSetupLabel = stringResource(id = R.string.printer_setup)
-  val noPairedDevicesLabel = stringResource(id = R.string.no_paired_devices)
   val connectionTypeLabel = stringResource(id = R.string.connection_type)
   val printerStatusLabel = stringResource(id = R.string.printer_status)
   val disconnectedLabel = stringResource(id = R.string.disconnected_from_printer)
   val receiptSentLabel = stringResource(id = R.string.test_receipt_sent)
   val pdfSentLabel = stringResource(id = R.string.pdf_sent_to_print)
-  val versionCompletedLabel = stringResource(id = R.string.version_request_completed)
   val connectedToLabel = stringResource(R.string.connected_to)
-  val usbPrinterNotFoundLabel = stringResource(R.string.usb_printer_not_found)
-  val usbPermissionRequestedlabel = stringResource(R.string.usb_permission_requested)
   val connectionFailedLabel = stringResource(R.string.connection_failed)
-  val usbConnectedLabel = stringResource(R.string.usb_connected)
-  val usbConnectionFailedLabel = stringResource(R.string.usb_connection_failed)
 
   val wifiIpFlow = backStackEntry.savedStateHandle.getStateFlow("wifi_ip", "")
   val wifiPortFlow = backStackEntry.savedStateHandle.getStateFlow("wifi_port", 9100)
@@ -162,10 +151,20 @@ fun PrinterSetup(
     }
   }
 
-  var printerName by rememberSaveable {
-    mutableStateOf(prefs.getString("printer_name", "") ?: "")
-  }
   val scope = rememberCoroutineScope()
+  val printerNameState = remember { mutableStateOf("") }
+  var isEditingPrinterName by remember { mutableStateOf(false) }
+
+  LaunchedEffect(true) {
+    val saved = prefs.getString("printer_name", null)
+    if (!saved.isNullOrBlank()) {
+      printerNameState.value = saved
+    } else {
+      printerNameState.value = "My Thermal Printer"
+      prefs.edit().putString("printer_name", printerNameState.value).apply()
+    }
+  }
+
   var statusText by remember { mutableStateOf("") }
   val selectedAddressFlow = backStackEntry.savedStateHandle.getStateFlow<String?>("address", null)
   val selectedAddress by selectedAddressFlow.collectAsState()
@@ -264,6 +263,29 @@ fun PrinterSetup(
           onItemClick = { selType = it }
         )
       }
+
+      Spacer(Modifier.height(16.dp))
+
+      Text(
+        text = statusText,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onBackground
+      )
+      Spacer(Modifier.height(8.dp))
+      val connectionText = when (connTypes[selType]) {
+        "Bluetooth" -> pairedDevices.getOrNull(selectedIndex)?.name
+          ?: stringResource(id = R.string.no_paired_devices)
+
+        "WiFi" -> resolvePrinterIp() ?: stringResource(R.string.ip_not_defined)
+
+        else -> stringResource(R.string.connection_type_not_supported)
+      }
+
+      Text(
+        text = connectionText,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onBackground
+      )
 
       Spacer(Modifier.height(16.dp))
 
@@ -391,41 +413,17 @@ fun PrinterSetup(
 
       Spacer(Modifier.height(16.dp))
 
-      Text(
-        text = statusText,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onBackground
-      )
-      Spacer(Modifier.height(8.dp))
-      val connectionText = when (connTypes[selType]) {
-        "Bluetooth" -> pairedDevices.getOrNull(selectedIndex)?.name
-          ?: stringResource(id = R.string.no_paired_devices)
-
-        "WiFi" -> resolvePrinterIp() ?: stringResource(R.string.ip_not_defined)
-
-        else -> stringResource(R.string.connection_type_not_supported)
-      }
-
-      Text(
-        text = connectionText,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onBackground
-      )
-
-      Spacer(Modifier.height(24.dp))
-
-      Text(
-        text = stringResource(R.string.printer_name_placeholder),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onBackground
-      )
-      PrinterNameField(
-        printerName = printerName,
-        onNameChange = { new ->
-          printerName = new
-          scope.launch(Dispatchers.IO) {
-            prefs.edit().putString("printer_name", new).apply()
+      EditablePrinterNameFieldStyled(
+        printerName = printerNameState.value,
+        onNameChange = { printerNameState.value = it },
+        isEditing = isEditingPrinterName,
+        onToggleEdit = {
+          if (isEditingPrinterName) {
+            scope.launch {
+              prefs.edit().putString("printer_name", printerNameState.value).apply()
+            }
           }
+          isEditingPrinterName = !isEditingPrinterName
         }
       )
 
@@ -441,7 +439,7 @@ fun PrinterSetupPreview() {
     PrinterSetup(
       navController = rememberNavController(),
       backStackEntry = rememberNavController().currentBackStackEntry!!,
-      currentLanguage = "en",
+      currentLanguage = "uk",
       onLanguageChange = {}
     )
   }
